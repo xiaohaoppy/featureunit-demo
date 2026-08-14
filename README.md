@@ -8,8 +8,9 @@
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/FEATUREUNIT-GUIDE.md`](docs/FEATUREUNIT-GUIDE.md) | **框架完整指南**：理念、概念分层、五个机制、契约体系、错误协议、配置安全、适用边界、语言选型、AI 工作流 |
+| [`docs/FEATUREUNIT-GUIDE.md`](docs/FEATUREUNIT-GUIDE.md) | **框架完整指南**：理念、概念分层、五个机制、契约体系、错误协议、配置安全、适用边界、语言选型、AI 工作流、管理台 |
 | [`docs/TUTORIAL.md`](docs/TUTORIAL.md) | **上手教程**：从"拆需求"到"功能上线"的 10 步实操（真实案例 change-email） |
+| [`docs/USAGE.md`](docs/USAGE.md) | **使用手册**：三个入口、日常流程、命令速查、配置管理、FAQ |
 | [`docs/contract-template.md`](docs/contract-template.md) | 契约六要素模板（写契约的输入） |
 | [`docs/contract-review-checklist.md`](docs/contract-review-checklist.md) | 契约评审清单（10 条，冻结前必过） |
 | [`docs/agent-prompts/`](docs/agent-prompts/) | 三条固定 AI prompt：契约设计师 / 独立评审员 / 单元实现者（ticket） |
@@ -34,42 +35,49 @@
 
 ```
 featureunit-demo/
-├── docs/
-│   ├── contract-template.md           # 契约六要素模板（写契约的输入）
-│   ├── contract-review-checklist.md   # 契约评审清单（10 条，冻结前必过）
-│   └── agent-prompts/
-│       ├── 01-contract-drafter.md     # AI 角色 A：契约设计师
-│       ├── 02-contract-reviewer.md    # AI 角色 B：契约评审员（独立于 A）
-│       └── 03-unit-implementer.md     # AI 角色 C：单元实现者（ticket 本体）
-├── scripts/feat.mjs                   # 脚手架 CLI（new/test/check/ticket）
-└── src/groups/auth-service/           # ★ 服务组：登录系统
-    ├── manifest.json                  # 服务组清单（版本、规则）
-    ├── config.ts                      # 唯一允许读环境变量的文件（fail fast）
-    ├── index.ts                       # ★ 组合根（人维护，AI 禁止触碰）
-    ├── group.test.ts                  # 组判据：端到端（走 HTTP 层）
-    ├── dev-server.ts                  # 本地开发服务器
-    ├── ports/                         # 8 个冻结端口（纯接口）
-    │   ├── errors.ts                  # 错误协议（AppError + 错误码）
-    │   ├── logger.ts                  # 日志端口
-    │   ├── user-store.ts              # 用户存储
-    │   ├── session-store.ts           # 会话存储
-    │   ├── password-hasher.ts         # 密码哈希
-    │   ├── email-sender.ts            # 邮件发送
-    │   ├── reset-token-store.ts       # 重置 token 存储
-    │   └── rate-limiter.ts            # 限流
-    ├── adapters/                      # 端口实现（可替换）
-    │   ├── memory/                    # 5 个内存适配器（测试判据的基石）
+├── docs/                            # 指南/教程/使用手册/模板/评审清单/prompts
+│   ├── FEATUREUNIT-GUIDE.md         # 框架完整指南
+│   ├── TUTORIAL.md                  # 上手教程（change-email 案例）
+│   ├── USAGE.md                     # 使用手册（入口/流程/命令/FAQ）
+│   ├── contract-template.md         # 契约六要素模板
+│   ├── contract-review-checklist.md # 契约评审清单（10 条）
+│   └── agent-prompts/               # Agent-A/B/C 三条固定 prompt
+├── public/                          # 管理台前端（admin.html + admin.js）
+├── scripts/
+│   ├── feat.mjs                     # 脚手架 CLI（new/ai-contract/test/check/ticket）
+│   ├── ai-contract.mjs              # CLI 入口（薄壳）
+│   └── ai-contract-lib.mjs          # ★ 核心库：CLI 与管理台共用（含 .d.mts 类型声明）
+└── src/groups/auth-service/         # ★ 服务组：登录系统
+    ├── manifest.json                # 服务组清单（版本、规则）
+    ├── config.ts                    # 配置（本地文件→环境变量→默认值，fail fast）
+    ├── index.ts                     # ★ 组合根（人维护，AI 禁止触碰）
+    ├── group.test.ts                # 组判据：端到端（走 HTTP 层）
+    ├── dev-server.ts                # 本地开发服务器 (:3000)
+    ├── admin-server.ts              # 管理台服务 (:3001/admin)
+    ├── ports/                       # 8 个冻结端口（纯接口）
+    │   ├── errors.ts                # 错误协议（AppError + 错误码）
+    │   ├── logger.ts                # 日志端口
+    │   ├── user-store.ts            # 用户存储
+    │   ├── session-store.ts         # 会话存储
+    │   ├── password-hasher.ts       # 密码哈希
+    │   ├── email-sender.ts          # 邮件发送
+    │   ├── reset-token-store.ts     # 重置 token 存储
+    │   └── rate-limiter.ts          # 限流
+    ├── adapters/                    # 端口实现（可替换）
+    │   ├── memory/                  # 5 个内存适配器（测试判据的基石）
     │   ├── scrypt-password-hasher.ts  # 真实 scrypt 哈希（零依赖）
-    │   ├── file-user-store.ts         # JSON 文件持久化（演示替换）
-    │   └── http.ts                    # 薄 HTTP 层（错误码→状态码映射在这）
-    └── features/                      # 7 个功能单元（每个 = 1 个 AI ticket）
-        ├── register-user/             #   contract.ts / spec.md / impl.ts / impl.test.ts
+    │   ├── file-user-store.ts       # JSON 文件持久化（演示替换）
+    │   └── http.ts                  # 薄 HTTP 层（错误码→状态码映射在这）
+    └── features/                    # 9 个功能单元（每个 = 1 个 AI ticket）
+        ├── register-user/           #   contract.ts / spec.md / impl.ts / impl.test.ts
         ├── login/
         ├── logout/
         ├── current-user/
         ├── change-password/
+        ├── change-email/
         ├── request-password-reset/
-        └── reset-password/
+        ├── reset-password/
+        └── delete-account/          # 已冻结契约（走完评审流程的样例）
 ```
 
 ## 三、快速开始
@@ -81,9 +89,10 @@ npm run dev      # 启动业务服务：http://localhost:3000
 npm run admin    # 启动管理台：http://localhost:3001/admin
 ```
 
-**管理台**（`npm run admin`）把框架的日常动作收进一个页面：
-单元总览（冻结状态）· 单元详情（4 文件查看）· 运行判据（单单元/全部）·
-AI 生成契约（草稿 → 机器初审 → 10 项人评审 → 冻结）· Ticket 查看复制 · 源码浏览。
+**管理台**（`npm run admin`）把框架的日常动作收进一个页面（7 个 tab）：
+**概览**（单元冻结状态 + 总闸）· **单元详情**（4 文件查看/在线编辑/git 留痕/接线检查）·
+**AI 契约生成**（草稿 → 机器初审 → 10 项人评审 → 冻结）· **Ticket** · **源码浏览** ·
+**试玩**（注册/登录/查我/登出/改密/改邮箱，cookie 自动流转）· **配置**（密钥打码 + 业务参数，存本地文件不进 git）。
 
 冒烟测试（另开终端）：
 
@@ -130,7 +139,8 @@ npm run feat -- check               # 提交前总闸
 
 ## 五·五、AI 帮你生成契约（人确认后才冻结）
 
-`feat ai-contract` 把 Agent-A（契约设计师）变成一条命令：**AI 生成草稿 → 机器初审 → 人逐条确认 → 冻结**。
+`feat ai-contract`（CLI）或管理台「AI 契约生成」面板（界面）把 Agent-A 变成一条命令：
+**AI 生成草稿 → 机器初审 → 人逐条确认 → 冻结**。两者共用同一套核心逻辑（`ai-contract-lib.mjs`）。
 
 ```bash
 # 1. 先生成单元
@@ -152,7 +162,9 @@ npm run feat -- ai-contract delete-account "登录用户可以删除自己的账
 4. **冻结**：全过 → 契约文件头部写入冻结记录（生成方式/评审人/评审结果）+ git 提交；
 5. 之后照旧：写判据 → 发 ticket → AI 只写 impl.ts。
 
-可配置环境变量：`AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、`AI_MODEL`（默认 deepseek-chat）。
+配置（也可在管理台「配置」tab 填写，保存到 `.featureunit.local.json`，不进 git）：
+`AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、`AI_MODEL`（默认 deepseek-chat）。
+优先级：**本地配置 → 环境变量 → 默认值**。
 
 ## 六、人为什么能负责（机制清单）
 
@@ -172,8 +184,12 @@ A：只改 `index.ts` 的 `buildDeps()` 里对应一行（如 `users:` 换成 Po
 7 个功能单元零改动，组测试全绿即可上线。
 
 **Q：怎么加新功能（如两步验证）？**
-A：`feat new verify-2fa` → 填契约 → 评审冻结 → 写判据 → 发 ticket。
-旧单元一个都不动，回归 = 跑一遍 `npm run check`。
+A：管理台"＋ 新功能单元"或 `feat new verify-2fa` → 填契约（或 AI 生成+评审）→ 冻结 →
+写判据 → 发 ticket。旧单元一个都不动，回归 = 跑一遍 `npm run check`。
+
+**Q：密钥/配置写在哪？**
+A：管理台「配置」tab 保存到 `.featureunit.local.json`（git 已忽略），
+优先级：本地配置 → 环境变量 → 默认值。密钥在界面上默认打码。
 
 **Q：契约要改怎么办？**
 A：走正式演进流程：新开 `contract.v2` → 写迁移测试 → 所有调用方一起升级（人评审）→
