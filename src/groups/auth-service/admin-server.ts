@@ -47,6 +47,10 @@ import {
   createUnit,
   saveUnitFile,
   checkWiring,
+  generateJudgeTest,
+  freezeJudge,
+  implementUnit,
+  unitStatus,
 } from "../../../scripts/ai-contract-lib.mjs";
 import { loadConfig } from "./config";
 import { buildDeps, createAuthApp } from "./index";
@@ -142,6 +146,52 @@ app.get("/admin/api/units/:name/wiring", (c) => {
   const files = readUnitFiles(name);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
   return c.json(checkWiring(name));
+});
+
+/** 开发向导状态：契约冻结/判据/实现/接线/上线 五步进度。 */
+app.get("/admin/api/units/:name/status", (c) => {
+  const name = c.req.param("name");
+  const status = unitStatus(name);
+  if (!status) return c.json({ error: `功能单元不存在: ${name}` }, 404);
+  return c.json(status);
+});
+
+/** AI 生成判据（Agent-B）：body = { mock }。生成草稿 → 人确认 → 冻结。 */
+app.post("/admin/api/units/:name/judge", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const { mock = true } = body as { mock?: boolean };
+  try {
+    const r = await generateJudgeTest(name, mock);
+    return c.json(r);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+/** 冻结判据（人确认后）：body = { reviewer? }。 */
+app.post("/admin/api/units/:name/judge/freeze", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const { reviewer } = body as { reviewer?: string };
+  try {
+    return c.json(freezeJudge(name, reviewer ?? "管理台操作员"));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 内置实现器（Agent-C 自动迭代）：body = { mock, maxRounds }。 */
+app.post("/admin/api/units/:name/implement", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const { mock = true, maxRounds = 5 } = body as { mock?: boolean; maxRounds?: number };
+  try {
+    const r = await implementUnit(name, { mock, maxRounds });
+    return c.json(r);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
 });
 
 // ---------------------------------------------------------------------------

@@ -144,6 +144,7 @@
       <button data-tab="ticket">Ticket</button>
       <button data-tab="source">源码浏览</button>
       <button data-tab="play">试玩</button>
+      <button data-tab="wizard">向导</button>
       <button data-tab="config">配置</button>
     </nav>
 
@@ -180,8 +181,14 @@
           <button class="btn ghost" id="btn-wiring">🔌 接线检查</button>
           <span id="unit-test-summary" class="hint"></span>
         </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="btn-judge">AI 生成判据</button>
+          <button class="btn ghost" id="btn-judge-freeze">确认判据（冻结）</button>
+          <button class="btn" id="btn-implement">AI 实现（自动迭代）</button>
+        </div>
         <div id="unit-test-output" class="output-box" style="margin-top:10px; display:none"></div>
         <div id="wiring-result" style="margin-top:10px; display:none"></div>
+        <div id="ai-work-output" class="output-box" style="margin-top:10px; display:none"></div>
       </div>
     </section>
 
@@ -267,6 +274,19 @@
         </div>
         <div class="msg" id="play-msg" style="display:none"></div>
         <pre class="code" id="play-output" style="margin-top:10px">选择操作后点击"发送"。</pre>
+      </div>
+    </section>
+
+    <!-- 向导：端到端进度 -->
+    <section class="panel" id="panel-wizard">
+      <div class="card">
+        <h2>开发向导（把 9 步工作流变成 next next next）</h2>
+        <div class="hint">选中一个单元，看它走到哪一步、下一步该做什么。</div>
+        <div class="row" style="margin-top:10px">
+          <select id="wizard-unit" style="flex:1"></select>
+          <button class="btn" id="btn-wizard-load">查看进度</button>
+        </div>
+        <div id="wizard-body" style="margin-top:14px"></div>
       </div>
     </section>
 

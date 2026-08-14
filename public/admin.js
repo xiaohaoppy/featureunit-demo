@@ -70,6 +70,7 @@ async function loadUnits() {
     const data = await api("/admin/api/units");
     state.units = data.units;
     $("group-label").textContent = `${data.group} · ${data.units.length} 个功能单元`;
+    fillWizardSelect(); // 向导下拉与单元列表同步
 
     // 左侧列表
     const ul = $("unit-list");
@@ -577,12 +578,121 @@ $("btn-config-save").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// 单元详情：AI 生成判据 / 冻结判据 / AI 实现（自动迭代）
+// ---------------------------------------------------------------------------
+
+function aiWorkOut(text) {
+  const box = $("ai-work-output");
+  box.style.display = "block";
+  box.textContent = text;
+}
+
+$("btn-judge").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const btn = $("btn-judge");
+  btn.disabled = true;
+  btn.textContent = "生成中…";
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/judge`, {
+      method: "POST", body: JSON.stringify({ mock: true }),
+    });
+    aiWorkOut(`判据草稿已生成（${r.invariants.length} 条不变量 → 对应测试骨架）\n\n请切到 impl.test.ts 查看，逐条补全断言后点「确认判据（冻结）」。`);
+    // 刷新单元详情，切到 test 文件
+    const data = await api(`/admin/api/units/${state.selectedUnit}`);
+    state.unitFiles = data.files;
+    state.unitFileTab = "test";
+    renderUnitDetail();
+  } catch (err) {
+    aiWorkOut(`生成失败：${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "AI 生成判据";
+  }
+});
+
+$("btn-judge-freeze").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/judge/freeze`, {
+      method: "POST", body: JSON.stringify({}),
+    });
+    aiWorkOut(`✅ ${r.message}`);
+    await loadUnits();
+  } catch (err) {
+    aiWorkOut(`冻结失败：${err.message}`);
+  }
+});
+
+$("btn-implement").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const btn = $("btn-implement");
+  btn.disabled = true;
+  btn.textContent = "实现中（自动迭代）…";
+  aiWorkOut("内置实现器启动：读契约+判据 → 生成 impl.ts → 跑判据 → 红则重试…\n");
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/implement`, {
+      method: "POST", body: JSON.stringify({ mock: true, maxRounds: 5 }),
+    });
+    const lines = r.rounds.map((x) => `第 ${x.round} 轮 → ${x.ok ? "✅ 判据全绿" : "❌ 判据红：" + x.summary}`).join("\n");
+    aiWorkOut(`${lines}\n\n${r.ok ? "✅ " : "⚠️ "}${r.message}`);
+    if (r.ok) {
+      const data = await api(`/admin/api/units/${state.selectedUnit}`);
+      state.unitFiles = data.files;
+      renderUnitDetail();
+      await loadUnits();
+    }
+  } catch (err) {
+    aiWorkOut(`实现失败：${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "AI 实现（自动迭代）";
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 向导：端到端进度
+// ---------------------------------------------------------------------------
+
+function fillWizardSelect() {
+  const sel = $("wizard-unit");
+  const prev = sel.value;
+  sel.innerHTML = state.units.map((u) => `<option>${u.name}</option>`).join("");
+  if (prev && state.units.some((u) => u.name === prev)) sel.value = prev;
+  else if (state.units.length) sel.value = state.units[0].name;
+}
+
+$("btn-wizard-load").addEventListener("click", loadWizard);
+$("wizard-unit").addEventListener("dblclick", loadWizard);
+
+async function loadWizard() {
+  const name = $("wizard-unit").value;
+  if (!name) return;
+  const body = $("wizard-body");
+  body.innerHTML = "加载中…";
+  try {
+    const r = await api(`/admin/api/units/${name}/status`);
+    body.innerHTML = `
+      <div class="msg ${r.stepsDone === r.stepsTotal ? "ok" : "warn"}">
+        进度 ${r.stepsDone}/${r.stepsTotal}${r.stepsDone === r.stepsTotal ? " ✅ 可上线" : "（按顺序完成下一步）"}
+      </div>` +
+      r.steps.map((s, i) => `
+        <div class="review-item">
+          <span class="idx">${String(i + 1).padStart(2)}/5</span>
+          <span class="text">${s.done ? "✅" : "⬜"} ${escapeHtml(s.label)} — <span class="hint">${escapeHtml(s.hint)}</span></span>
+        </div>`).join("");
+  } catch (err) {
+    body.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------
 
 $("btn-refresh").addEventListener("click", loadUnits);
 
 fillPlayOps();
+fillWizardSelect();
 loadUnits();
 loadSourceList();
 loadConfigPanel();

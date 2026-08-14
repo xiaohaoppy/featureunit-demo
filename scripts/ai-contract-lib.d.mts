@@ -41,6 +41,37 @@ export function checkWiring(name: string): {
   checks: Array<{ label: string; ok: boolean }>;
   allOk: boolean;
 };
+export function isJudgePlaceholder(test: string | null): boolean;
+export function isImplStub(impl: string | null): boolean;
+export function generateJudgeTest(
+  name: string,
+  mock?: boolean,
+): Promise<{ name: string; test: string; invariants: string[] }>;
+export function freezeJudge(
+  name: string,
+  reviewer?: string,
+): { committed: boolean; message: string };
+export function implementUnit(
+  name: string,
+  opts?: { mock?: boolean; maxRounds?: number },
+): Promise<{
+  ok: boolean;
+  rounds: Array<{ round: number; ok: boolean; summary: string; tail: string }>;
+  message: string;
+}>;
+export function unitStatus(name: string): {
+  name: string;
+  frozen: boolean;
+  judgePlaceholder: boolean;
+  judgeFrozen: boolean;
+  implStub: boolean;
+  wired: boolean;
+  testsGreen: boolean;
+  testSummary: string;
+  steps: Array<{ id: string; label: string; done: boolean; hint: string }>;
+  stepsDone: number;
+  stepsTotal: number;
+} | null;
 export function mockDraft(
   name: string,
   requirement: string,

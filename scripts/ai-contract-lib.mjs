@@ -259,8 +259,198 @@ export function saveUnitFile(name, file, content, note = "") {
 }
 
 // ---------------------------------------------------------------------------
-// 接线检查（组合根/HTTP/manifest 是否已接入该单元）
+// 判据生成（Agent-B）与内置实现器（Agent-C 自动迭代）
 // ---------------------------------------------------------------------------
+
+/** 判据是否为"占位"（未真正写测试）：含 expect(true) 且含 TODO。 */
+export function isJudgePlaceholder(test) {
+  if (!test) return true;
+  return test.includes("expect(true)") && test.includes("TODO");
+}
+
+/** 实现是否还是桩（NOT_IMPLEMENTED）。 */
+export function isImplStub(impl) {
+  return !impl || impl.includes("NOT_IMPLEMENTED");
+}
+
+/** 从契约文本里提取不变量条目（"N. 文本" 形式，供 mock 判据生成用）。 */
+function extractInvariants(contract) {
+  const m = /不变量[^]*?\n\s*\*\/[^]*?\*\/|不变量[\s\S]*?\*\//.exec(contract ?? "");
+  const block = m?.[0] ?? "";
+  const items = [...block.matchAll(/\*\s*(\d+)\.\s*([^\n*]+)/g)].map((x) => x[2].trim());
+  return items.length ? items : ["（契约未写明不变量，请先评审契约）"];
+}
+
+/**
+ * 生成判据草稿（Agent-B）并写入 impl.test.ts。
+ * - 真实模式：调 API，按 04-judge-drafter.md 生成完整判据；
+ * - mock 模式：生成"不变量驱动的测试骨架"——每条不变量一个 it，body 显式
+ *   抛 TODO（必红，杜绝 expect(true) 假绿），供人逐条补全断言。
+ */
+export async function generateJudgeTest(name, mock = true) {
+  const files = readUnitFiles(name);
+  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+  const contract = files.contract;
+
+  let test;
+  if (mock) {
+    const items = extractInvariants(contract);
+    const c = camel(name);
+    test = `/**
+ * [角色] 功能单元：${name} —— 判据（草稿，模拟 AI 生成，未冻结）
+ * 每条不变量一个 it；body 为显式 TODO（必红），请逐条补全断言。
+ * 判据作者（Agent-B）纪律：禁止 expect(true) 占位、禁止改契约/实现。
+ */
+
+import { describe, it, expect } from "vitest";
+import { ${c} } from "./impl";
+
+describe("${name} 单元判据", () => {
+${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
+    // TODO: 组装内存适配器 → 调用 ${c} → 断言「${inv}」
+    throw new Error("TODO: 断言不变量${i + 1}（${inv}）");
+  });`).join("\n\n")}
+});
+`;
+  } else {
+    const promptText = readFileSync(join(ROOT, "docs/agent-prompts/04-judge-drafter.md"), "utf8");
+    const system = promptText.replace("{CONTRACT_CONTENT}", contract);
+    const raw = await callLLM({
+      system,
+      user: `单元名：${name}（服务组 ${GROUP}）\n只输出一个 ts 代码块：impl.test.ts 的完整内容。`,
+    });
+    const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
+    if (!m) throw new Error(`模型输出无法解析（需要单个 ts 代码块）。原始输出片段：\n${raw.slice(0, 300)}`);
+    test = m[1];
+  }
+
+  writeFileSync(join(unitDir(name), "impl.test.ts"), test);
+  return { name, test, invariants: extractInvariants(contract) };
+}
+
+/**
+ * 冻结判据：人确认后，在 impl.test.ts 头部写冻结记录 + git 提交。
+ * 判据冻结后，实现者（Agent-C）才被允许对照它写 impl.ts。
+ */
+export function freezeJudge(name, reviewer = "管理台操作员") {
+  const path = join(unitDir(name), "impl.test.ts");
+  if (!existsSync(path)) throw new Error(`判据文件不存在: ${name}/impl.test.ts`);
+  const record = `/**
+ * 冻结记录（判据）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后冻结。
+ * 冻结后任何修改必须走契约演进流程（改了判据 = 作弊，git 历史可追溯）。
+ */
+`;
+  writeFileSync(path, record + readFileSync(path, "utf8"));
+  spawnSync("git", ["add", "-A"], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `judge: ${name} 判据冻结（人确认）`], { cwd: ROOT });
+  return { committed: commit.status === 0, message: commit.status === 0 ? `已冻结并提交: ${name}/impl.test.ts` : "判据已写盘，git 提交失败" };
+}
+
+/**
+ * 内置实现器（Agent-C 自动迭代）：
+ * 读契约 + 判据 → 生成 impl.ts → 跑判据 → 红了带失败信息重试（≤ maxRounds）→
+ * 全绿才 git 提交；超限则停止并报告（失败安全：干不了就求援，绝不假装成功）。
+ *
+ * - 真实模式：调 API（03-unit-implementer 纪律），判据失败输出作为下一轮反馈；
+ * - mock 模式：演示"迭代与失败安全"路径——每轮写一个带轮次的桩，必然红灯，
+ *   演示读失败信息、重试、最终停手报告。
+ */
+export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}) {
+  const files = readUnitFiles(name);
+  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+  if (isJudgePlaceholder(files.test)) {
+    throw new Error("判据尚未就绪（还是占位测试）——先写判据并确认，再让 AI 实现");
+  }
+
+  const rounds = [];
+  for (let round = 1; round <= maxRounds; round++) {
+    // ① 生成实现
+    if (mock) {
+      // mock 实现器：每轮写一个"看起来在努力"但故意不满足判据的桩，
+      // 用于演示"红灯 → 读失败 → 重试"循环与最终停手。
+      const impl = `/**
+ * [角色] 功能单元：${name} —— 实现（内置实现器 mock，第 ${round}/${maxRounds} 轮尝试）
+ * 演示失败安全：此实现未满足判据，判据会红。
+ */
+import { AppError, ErrorCodes } from "../../ports/errors";
+import type { ${pascal(name)} } from "./contract";
+
+export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
+  throw new AppError(ErrorCodes.INVALID_INPUT, 400); // 第 ${round} 轮：故意不满足不变量
+};
+`;
+      writeFileSync(join(unitDir(name), "impl.ts"), impl);
+    } else {
+      const promptText = readFileSync(join(ROOT, "docs/agent-prompts/03-unit-implementer.md"), "utf8");
+      const feedback = rounds.length
+        ? `\n\n【上一轮判据失败信息，请修正】\n${rounds[rounds.length - 1].summary}\n${rounds[rounds.length - 1].tail}`
+        : "";
+      const system = promptText
+        .replaceAll("{FEATURE_NAME}", name)
+        .replaceAll("{GROUP}", `src/groups/${GROUP}`)
+        + feedback;
+      const raw = await callLLM({ system, user: `只输出一个 ts 代码块：impl.ts 的完整内容。` });
+      const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
+      if (!m) throw new Error(`模型输出无法解析：\n${raw.slice(0, 300)}`);
+      writeFileSync(join(unitDir(name), "impl.ts"), m[1]);
+    }
+
+    // ② 跑判据
+    const result = runUnitTest(name);
+    const summary = result.summary;
+    const tail = result.output.slice(-1500);
+    rounds.push({ round, ok: result.ok, summary, tail });
+
+    if (result.ok) {
+      // ③ 全绿 → 提交
+      spawnSync("git", ["add", "-A"], { cwd: ROOT });
+      spawnSync("git", ["commit", "-q", "-m", `feat(${name}): implement（内置实现器，${round}/${maxRounds} 轮判据全绿）`], { cwd: ROOT });
+      return { ok: true, rounds, message: `判据全绿（第 ${round} 轮），已提交实现` };
+    }
+  }
+
+  return {
+    ok: false,
+    rounds,
+    message: `达到最大迭代 ${maxRounds} 轮仍未通过判据——停手，需人工介入（这是失败安全，不是假装成功）`,
+  };
+}
+
+/**
+ * 单元状态聚合（供开发向导）：契约冻结 / 判据就绪 / 实现完成 / 接线 / 上线。
+ */
+export function unitStatus(name) {
+  const files = readUnitFiles(name);
+  if (!files.contract) return null;
+  const frozen = (files.contract ?? "").includes("冻结记录");
+  const judgePlaceholder = isJudgePlaceholder(files.test);
+  const judgeFrozen = (files.test ?? "").includes("冻结记录");
+  const implStub = isImplStub(files.impl);
+  const wiring = checkWiring(name);
+  const test = runUnitTest(name);
+
+  const steps = [
+    { id: "contract", label: "① 契约冻结", done: frozen, hint: frozen ? "已冻结" : "契约尚未冻结（走 AI 生成 + 人评审）" },
+    { id: "judge", label: "② 判据就绪", done: judgeFrozen && !judgePlaceholder, hint: judgeFrozen ? "判据已冻结" : judgePlaceholder ? "判据还是占位（需 AI 生成 + 人确认）" : "判据已写但未冻结" },
+    { id: "impl", label: "③ 实现完成", done: !implStub && test.ok, hint: implStub ? "实现还是桩（需 AI 实现）" : test.ok ? "实现完成且判据绿" : "实现已写但判据红" },
+    { id: "wiring", label: "④ 接线完成", done: wiring.allOk, hint: wiring.allOk ? "已接线" : `接线缺口 ${wiring.checks.filter((x) => !x.ok).length} 项` },
+    { id: "ship", label: "⑤ 上线就绪", done: false, hint: "跑总闸确认（tsc + 全部测试）" },
+  ];
+
+  return {
+    name,
+    frozen,
+    judgePlaceholder,
+    judgeFrozen,
+    implStub,
+    wired: wiring.allOk,
+    testsGreen: test.ok,
+    testSummary: test.summary,
+    steps,
+    stepsDone: steps.filter((s) => s.done).length,
+    stepsTotal: steps.length,
+  };
+}
 
 /**
  * 检查新单元是否已"接线"进服务：组合根 import / AuthApi / createAuthApp /
