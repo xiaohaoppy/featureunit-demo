@@ -19,12 +19,65 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const ROOT = resolve(import.meta.dirname, "..");
 export const GROUPS_DIR = join(ROOT, "src/groups");
 export const GROUP = "auth-service";
+
+// ---------------------------------------------------------------------------
+// 本地配置（管理台写入；密钥不进 git）
+// ---------------------------------------------------------------------------
+
+/** 本地配置文件路径（.gitignore 已忽略，密钥只存在本机）。 */
+export const LOCAL_CONFIG_PATH = join(ROOT, ".featureunit.local.json");
+
+/** 读取本地配置（文件不存在/损坏 → {}）。 */
+export function readLocalConfig() {
+  try {
+    if (!existsSync(LOCAL_CONFIG_PATH)) return {};
+    return JSON.parse(readFileSync(LOCAL_CONFIG_PATH, "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 写入本地配置：只更新传入的 key；值为空字符串 = 删除该 key。
+ * 不传 key 的已有配置会被保留（只改用户点的那几项）。
+ */
+export function writeLocalConfig(values) {
+  const cfg = readLocalConfig();
+  for (const [key, value] of Object.entries(values)) {
+    if (value === "" || value === null || value === undefined) delete cfg[key];
+    else cfg[key] = value;
+  }
+  writeFileSync(LOCAL_CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n");
+  return cfg;
+}
+
+/**
+ * 配置取值优先级：本地配置文件 → 环境变量 → 默认值。
+ * 这样"写死的配置"（管理台保存）和"临时覆盖"（CI/服务器环境变量）两不误。
+ */
+export function resolveConfigValue(key, fallback = "") {
+  const local = readLocalConfig();
+  const v = local[key] ?? process.env[key];
+  return v === undefined || v === null || v === "" ? fallback : String(v);
+}
+
+/** 管理台配置面板的 key 清单与默认值（与 config.ts 的 EnvSchema 保持一致）。 */
+export const CONFIG_KEYS = [
+  { key: "AI_API_KEY", label: "AI 密钥（OpenAI 兼容 API）", secret: true, fallback: "" },
+  { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
+  { key: "AI_MODEL", label: "AI 模型名", secret: false, fallback: "deepseek-chat" },
+  { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
+  { key: "SESSION_TTL_DAYS", label: "会话有效期（天）", secret: false, fallback: "30" },
+  { key: "RESET_TOKEN_TTL_MINUTES", label: "重置 token 有效期（分钟）", secret: false, fallback: "30" },
+  { key: "RATE_LIMIT_MAX", label: "找回密码限流（次/窗口）", secret: false, fallback: "3" },
+  { key: "RATE_LIMIT_WINDOW_MS", label: "限流窗口（毫秒）", secret: false, fallback: "600000" },
+];
 
 // ---------------------------------------------------------------------------
 // 评审清单：与 docs/contract-review-checklist.md 的 10 条保持一致
@@ -51,6 +104,183 @@ export function unitDir(name) {
 /** kebab-case → PascalCase（delete-account → DeleteAccount）。 */
 export function pascal(kebab) {
   return kebab.split("-").map((s) => s[0].toUpperCase() + s.slice(1)).join("");
+}
+
+/** kebab-case → camelCase（delete-account → deleteAccount）。 */
+export function camel(kebab) {
+  const p = pascal(kebab);
+  return p[0].toLowerCase() + p.slice(1);
+}
+
+// ---------------------------------------------------------------------------
+// 新建功能单元（模板与 feat.mjs CLI 共用——单一事实来源）
+// ---------------------------------------------------------------------------
+
+/** 新单元 4 文件模板（与 CLI feat new 生成的内容完全一致）。 */
+function unitTemplates(name) {
+  const P = pascal(name);
+  return {
+    "contract.ts": `/**
+ * [角色] 功能单元：${name} —— 契约（冻结区）
+ * 谁可以改：只有人（契约演进流程）。AI 实现任务中【禁止】修改本文件。
+ * 填写指南：docs/contract-template.md（六要素）
+ */
+
+import { z } from "zod";
+
+// TODO(人/契约设计师)：定义输入 schema（含边界规则，见模板第 2 节）
+export const ${P}Input = z.object({
+  // example: email: z.string().email(),
+});
+
+export type ${P}Input = z.infer<typeof ${P}Input>;
+
+// TODO：声明依赖端口（只允许纯数据 + 接口，禁止 ORM/HTTP/框架类型）
+export interface ${P}Deps {
+  // example: users: UserStore;
+}
+
+export interface ${P}Result {
+  // example: ok: true;
+}
+
+export interface ${P} {
+  (input: ${P}Input, deps: ${P}Deps): Promise<${P}Result>;
+}
+
+/**
+ * 不变量（≥3 条，条条可被测试断言；impl.test.ts 会逐条验证）：
+ * 1. TODO
+ * 2. TODO
+ * 3. TODO
+ */
+`,
+    "spec.md": `# 契约规格：${name}（v0.1-draft）
+
+<!-- 按 docs/contract-template.md 六要素填写 -->
+
+## 1. 一句话目标
+TODO
+
+## 2. 输入
+TODO
+
+## 3. 输出
+TODO
+
+## 4. 错误码
+TODO
+
+## 5. 端口
+TODO
+
+## 6. 不变量 / 边界情况
+- TODO（≥3 条，条条可测）
+- 【不】负责：TODO
+`,
+    "impl.ts": `/**
+ * [角色] 功能单元：${name} —— 实现（AI 写入区）
+ * 本文件是单元内【唯一】允许 AI 修改的文件。
+ * 当前为桩实现：判据是红的，交给 AI（或人）按契约填成真的。
+ */
+
+import type { ${P} } from "./contract";
+
+export const ${camel(name)}: ${P} = async (_input, _deps) => {
+  throw new Error("NOT_IMPLEMENTED: 按 contract.ts 的不变量实现本单元");
+};
+`,
+    "impl.test.ts": `/**
+ * [角色] 功能单元：${name} —— 判据（冻结区）
+ * AI 的"完成标准"：AI 不得修改本文件（改了判据 = 作弊）。
+ * TODO(人/契约评审)：契约冻结后，把不变量逐条翻译成测试。
+ * 全部使用内存适配器（src/groups/<组>/adapters/memory/**），不依赖基础设施。
+ */
+
+import { describe, expect, it } from "vitest";
+import { ${camel(name)} } from "./impl";
+
+describe("${name} 单元判据", () => {
+  it("TODO: 不变量 1", async () => {
+    // TODO: 组装内存适配器 → 调用 ${camel(name)} → 断言结果/错误码
+    expect(true).toBe(true);
+  });
+});
+`,
+  };
+}
+
+/**
+ * 创建新功能单元（4 文件模板）。
+ * @param name kebab-case 功能名（如 verify-2fa）
+ */
+export function createUnit(name) {
+  if (!/^[a-z0-9-]+$/.test(name)) {
+    throw new Error("功能名只允许小写字母、数字、连字符（kebab-case）");
+  }
+  const dir = unitDir(name);
+  if (existsSync(join(dir, "contract.ts"))) {
+    throw new Error(`功能单元已存在: ${GROUP}/features/${name}`);
+  }
+  mkdirSync(dir, { recursive: true });
+  for (const [file, content] of Object.entries(unitTemplates(name))) {
+    writeFileSync(join(dir, file), content);
+  }
+  return { name, dir };
+}
+
+// ---------------------------------------------------------------------------
+// 文件编辑（管理台：人编辑 + git 留痕）
+// ---------------------------------------------------------------------------
+
+const UNIT_FILES = { contract: "contract.ts", spec: "spec.md", impl: "impl.ts", test: "impl.test.ts" };
+
+/**
+ * 保存单元文件（管理台编辑用）。人编辑冻结区文件是允许的，
+ * 但每次保存必须 git 提交留痕（"谁在什么时候改了什么"可追溯）。
+ * @returns {saved, committed, message}
+ */
+export function saveUnitFile(name, file, content, note = "") {
+  const target = UNIT_FILES[file];
+  if (!target) throw new Error(`不允许编辑的文件: ${file}`);
+  const path = join(unitDir(name), target);
+  if (!existsSync(path)) throw new Error(`文件不存在: ${target}`);
+
+  writeFileSync(path, content);
+  spawnSync("git", ["add", "-A"], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `admin: 编辑 ${name}/${target} — ${note || "（无备注）"}`], { cwd: ROOT });
+  return {
+    saved: true,
+    committed: commit.status === 0,
+    message: commit.status === 0
+      ? `已保存并提交: ${name}/${target}`
+      : `已保存到磁盘，但 git 提交失败（${commit.stderr?.toString().trim() || "内容无变化"}）`,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 接线检查（组合根/HTTP/manifest 是否已接入该单元）
+// ---------------------------------------------------------------------------
+
+/**
+ * 检查新单元是否已"接线"进服务：组合根 import / AuthApi / createAuthApp /
+ * HTTP 路由 / manifest 版本。机器检查、人动手——组合根仍由人编辑。
+ */
+export function checkWiring(name) {
+  const c = camel(name);
+  const index = readSourceFile("index.ts") ?? "";
+  const http = readSourceFile("adapters/http.ts") ?? "";
+  const manifest = readSourceFile("manifest.json") ?? "";
+
+  const checks = [
+    { label: `index.ts 已 import 实现 (features/${name}/impl)`, ok: index.includes(`features/${name}/impl`) },
+    { label: `index.ts 已 import 契约 (features/${name}/contract)`, ok: index.includes(`features/${name}/contract`) },
+    { label: "AuthApi 已声明操作方法", ok: index.includes(`${c}(input: unknown)`) || index.includes(`${c}: (`) },
+    { label: "createAuthApp 已接线（parseOrThrow + 注入）", ok: index.includes(`${c}: (input) => ${c}(`) },
+    { label: "HTTP 路由已添加（adapters/http.ts）", ok: http.includes(`/api/${name}`) },
+    { label: "manifest.json 已登记版本", ok: manifest.includes(`"${name}"`) },
+  ];
+  return { name, checks, allOk: checks.every((x) => x.ok) };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,12 +387,13 @@ ${requirement}
 
 /** 调用 OpenAI 兼容 API 生成契约（真实模式）。 */
 async function callLLM(prompt) {
-  const key = process.env.AI_API_KEY ?? process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
+  // 优先级：本地配置（管理台写入）→ 环境变量 → 默认值
+  const key = resolveConfigValue("AI_API_KEY");
   if (!key) {
-    throw new Error("未配置 API Key：请设置环境变量 AI_API_KEY（或 DEEPSEEK_API_KEY）。演示模式请用 mock: true");
+    throw new Error("未配置 API Key：请在管理台「配置」面板填写 AI_API_KEY，或设置环境变量。演示模式请用 mock: true");
   }
-  const base = process.env.AI_BASE_URL ?? "https://api.deepseek.com";
-  const model = process.env.AI_MODEL ?? "deepseek-chat";
+  const base = resolveConfigValue("AI_BASE_URL", "https://api.deepseek.com");
+  const model = resolveConfigValue("AI_MODEL", "deepseek-chat");
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",

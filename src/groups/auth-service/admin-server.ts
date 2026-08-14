@@ -30,8 +30,12 @@ import { join } from "node:path";
 import {
   GROUP,
   REVIEW_ITEMS,
+  CONFIG_KEYS,
   listUnits,
   readUnitFiles,
+  readLocalConfig,
+  writeLocalConfig,
+  resolveConfigValue,
   generateDraft,
   machineCheck,
   freeze,
@@ -40,10 +44,20 @@ import {
   buildTicketText,
   readSourceFile,
   listSourceFiles,
+  createUnit,
+  saveUnitFile,
+  checkWiring,
 } from "../../../scripts/ai-contract-lib.mjs";
+import { loadConfig } from "./config";
+import { buildDeps, createAuthApp } from "./index";
+import { createHttpApp } from "./adapters/http";
 
 const ROOT = join(import.meta.dirname, "..", "..", ".."); // src/groups/auth-service → 项目根
 const PUBLIC_DIR = join(ROOT, "public");
+
+// 业务应用实例（管理台"试玩"面板直接调用，无需另起 dev 服务；
+// 每次请求共享同一内存存储——与 npm run dev 行为一致）
+const bizApp = createHttpApp(createAuthApp(buildDeps(loadConfig())));
 
 const app = new Hono();
 
@@ -62,7 +76,7 @@ app.get("/admin/app.js", (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// 单元总览 / 详情
+// 单元总览 / 详情 / 新建 / 文件编辑 / 接线检查
 // ---------------------------------------------------------------------------
 
 app.get("/admin/api/units", (c) => {
@@ -86,6 +100,48 @@ app.get("/admin/api/units/:name", (c) => {
   const files = readUnitFiles(name);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
   return c.json({ name, files });
+});
+
+/** 新建功能单元（feat new 的界面入口）：body = { name } */
+app.post("/admin/api/units", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { name } = body as { name?: string };
+  try {
+    createUnit(name ?? "");
+    return c.json({ ok: true, name });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/**
+ * 保存单元文件（管理台编辑，人编辑 + git 留痕）：
+ * body = { file: "contract"|"spec"|"impl"|"test", content, note }
+ */
+app.put("/admin/api/units/:name/files", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const { file, content, note } = body as {
+    file?: "contract" | "spec" | "impl" | "test";
+    content?: string;
+    note?: string;
+  };
+  if (typeof content !== "string") {
+    return c.json({ error: "content 必须是字符串" }, 400);
+  }
+  try {
+    return c.json(saveUnitFile(name, file ?? "impl", content, note ?? ""));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 接线检查：组合根/HTTP/manifest 是否已接入该单元。 */
+app.get("/admin/api/units/:name/wiring", (c) => {
+  const name = c.req.param("name");
+  const files = readUnitFiles(name);
+  if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
+  return c.json(checkWiring(name));
 });
 
 // ---------------------------------------------------------------------------
@@ -160,6 +216,100 @@ app.post("/admin/api/ai/freeze", async (c) => {
     return c.json({ frozen: true, rejected: [], ...result });
   } catch (err) {
     // 单元不存在 / 文件缺失等 → 结构化错误（而不是裸 500）
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 配置管理（含密钥：默认打码；写入 .featureunit.local.json，不进 git）
+// ---------------------------------------------------------------------------
+
+/** 配置面板视图：每个 key 的当前生效值 + 来源（本地文件/环境变量/默认值）。 */
+function configView() {
+  const local = readLocalConfig();
+  const values = CONFIG_KEYS.map(({ key, label, secret, fallback }) => {
+    const fromLocal = key in local;
+    const fromEnv = process.env[key] !== undefined && process.env[key] !== "";
+    const value = resolveConfigValue(key, fallback);
+    return {
+      key,
+      label,
+      secret,
+      value: secret && value ? maskSecret(value) : value,
+      hasValue: value !== "",
+      source: fromLocal ? "本地配置文件" : fromEnv ? "环境变量" : "默认值",
+    };
+  });
+  return { values, localPath: "featureunit-demo/.featureunit.local.json（已在 .gitignore）" };
+}
+
+/** 密钥打码：只显示首 4 + 尾 4（sk-abc…wxyz）。 */
+function maskSecret(v: string): string {
+  if (v.length <= 10) return "••••";
+  return `${v.slice(0, 4)}••••${v.slice(-4)}`;
+}
+
+/** 读取配置面板视图（密钥打码）。 */
+app.get("/admin/api/config", (c) => {
+  return c.json(configView());
+});
+
+/**
+ * 保存配置：body = { values: { key: value } }
+ * 写入 .featureunit.local.json；空字符串 = 删除该 key。
+ * 保存后返回最新视图（含来源标注）。
+ */
+app.put("/admin/api/config", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { values } = body as { values?: Record<string, string> };
+  if (!values || typeof values !== "object") {
+    return c.json({ error: "values 必须是 { key: value } 对象" }, 400);
+  }
+  // 只接受 CONFIG_KEYS 里登记的 key（防任意写文件）
+  const allowed = new Set(CONFIG_KEYS.map((x) => x.key));
+  const clean: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (!allowed.has(key)) continue;
+    clean[key] = typeof value === "string" ? value.trim() : String(value ?? "");
+  }
+  writeLocalConfig(clean);
+  return c.json(configView());
+});
+
+// ---------------------------------------------------------------------------
+// 试玩（业务冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）
+// ---------------------------------------------------------------------------
+
+/**
+ * 代理到内部业务应用：body = { method, path, body?, cookie? }
+ * 返回 { status, body, setCookie }——前端自行保存 cookie 模拟浏览器。
+ */
+app.post("/admin/api/play", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { method = "GET", path, data, cookie } = body as {
+    method?: string;
+    path?: string;
+    data?: unknown;
+    cookie?: string;
+  };
+  if (typeof path !== "string" || !path.startsWith("/api/")) {
+    return c.json({ error: "path 必须以 /api/ 开头" }, 400);
+  }
+  try {
+    const res = await bizApp.request(path, {
+      method,
+      headers: {
+        "content-type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+    return c.json({
+      status: res.status,
+      body: await res.text(),
+      setCookie: res.headers.get("set-cookie") ?? null,
+    });
+  } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
 });

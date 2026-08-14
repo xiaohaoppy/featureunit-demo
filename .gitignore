@@ -5,6 +5,9 @@ dist/
 # 本地 npm 缓存（本机 npm 全局缓存不可写时的临时方案）
 .npm-cache/
 
+# 管理台写入的本地配置（含 AI 密钥——绝不进 git！）
+.featureunit.local.json
+
 # FileUserStore 演示数据（生产环境的数据绝不能进 git）
 data/
 

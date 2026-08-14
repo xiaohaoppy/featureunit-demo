@@ -368,15 +368,212 @@ async function loadSourceList() {
 }
 
 // ---------------------------------------------------------------------------
-// 新功能单元
+// 单元详情：编辑模式（人编辑 + git 留痕）
 // ---------------------------------------------------------------------------
 
-$("btn-new-unit").addEventListener("click", () => {
+const FROZEN_WARN = { contract: "契约（冻结区）", spec: "规格（冻结区）", test: "判据（冻结区）", impl: "实现（AI 写入区）" };
+
+$("btn-edit-toggle").addEventListener("click", () => {
+  if (!state.selectedUnit || !state.unitFiles) return;
+  const editor = $("edit-editor");
+  const editing = editor.style.display !== "none";
+  if (editing) {
+    // 退出编辑：丢弃未保存内容，回到只读视图
+    editor.style.display = "none";
+    $("file-content").style.display = "";
+    $("btn-edit-toggle").textContent = "编辑当前文件";
+    return;
+  }
+  $("edit-content").value = state.unitFiles[state.unitFileTab] ?? "";
+  $("edit-warning-file").textContent = `：${FILE_LABELS[state.unitFileTab]}（${FROZEN_WARN[state.unitFileTab] ?? ""}）`;
+  $("file-content").style.display = "none";
+  editor.style.display = "block";
+  $("btn-edit-toggle").textContent = "取消编辑";
+});
+
+$("btn-edit-cancel").addEventListener("click", () => {
+  $("edit-editor").style.display = "none";
+  $("file-content").style.display = "";
+  $("btn-edit-toggle").textContent = "编辑当前文件";
+});
+
+$("btn-edit-save").addEventListener("click", async () => {
+  const note = $("edit-note").value.trim();
+  if (!note) {
+    alert("请填写修改说明（会写进 git 提交信息）");
+    return;
+  }
+  const btn = $("btn-edit-save");
+  btn.disabled = true;
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/files`, {
+      method: "PUT",
+      body: JSON.stringify({ file: state.unitFileTab, content: $("edit-content").value, note }),
+    });
+    // 保存成功：刷新只读视图 + 更新本地状态
+    state.unitFiles[state.unitFileTab] = $("edit-content").value;
+    $("edit-editor").style.display = "none";
+    $("file-content").style.display = "";
+    $("btn-edit-toggle").textContent = "编辑当前文件";
+    $("edit-note").value = "";
+    $("file-content").textContent = state.unitFiles[state.unitFileTab];
+    alert(r.message);
+    loadUnits(); // 冻结状态可能变化
+  } catch (err) {
+    alert(`保存失败：${err.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 单元详情：接线检查（组合根/HTTP/manifest 是否已接入）
+// ---------------------------------------------------------------------------
+
+$("btn-wiring").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const box = $("wiring-result");
+  box.style.display = "block";
+  box.innerHTML = "检查中…";
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/wiring`);
+    box.innerHTML = `<div class="msg ${r.allOk ? "ok" : "warn"}">${r.allOk ? "✅ 已完整接线" : "⚠️ 尚未完全接线（组合根由人编辑）"}</div>` +
+      `<div class="check-list">` +
+      r.checks.map((x) => `<div class="check-row"><span class="mark">${x.ok ? "✅" : "❌"}</span><span>${escapeHtml(x.label)}</span></div>`).join("") +
+      `</div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 新建功能单元（直接调 API，不再去终端）
+// ---------------------------------------------------------------------------
+
+$("btn-new-unit").addEventListener("click", async () => {
   const name = prompt("新功能单元名（kebab-case，如 verify-2fa）：", "verify-2fa");
   if (!name || !/^[a-z0-9-]+$/.test(name)) return;
-  // 通过管理 API 调用脚手架（先检查单元是否存在——生成操作由 CLI 完成更安全，
-  // 这里引导用户在终端执行；保持界面与 CLI 同一事实来源）
-  alert(`请在终端执行：\n\n  npm run feat -- new ${name}\n\n生成后点击"刷新"。`);
+  try {
+    await api("/admin/api/units", { method: "POST", body: JSON.stringify({ name }) });
+    alert(`✓ 已生成功能单元 ${name}\n下一步：在「AI 契约生成」面板生成契约，或人工填写。`);
+    await loadUnits();
+  } catch (err) {
+    alert(`创建失败：${err.message}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 试玩：业务冒烟（注册/登录/查我/登出/改密/改邮箱/找回密码）
+// ---------------------------------------------------------------------------
+
+/** 试玩操作清单：操作名 → { method, path, 示例请求体 } */
+const PLAY_OPS = {
+  "注册 register": { method: "POST", path: "/api/register", body: { email: "demo@b.com", password: "secret123" } },
+  "登录 login": { method: "POST", path: "/api/login", body: { email: "demo@b.com", password: "secret123" } },
+  "查我 me": { method: "GET", path: "/api/me" },
+  "登出 logout": { method: "POST", path: "/api/logout" },
+  "修改密码 change-password": { method: "POST", path: "/api/change-password", body: { currentPassword: "secret123", newPassword: "newpass456" } },
+  "修改邮箱 change-email": { method: "POST", path: "/api/change-email", body: { currentPassword: "secret123", newEmail: "new@b.com" } },
+  "找回密码-请求 request-reset": { method: "POST", path: "/api/password-reset/request", body: { email: "demo@b.com" } },
+  "找回密码-重置 reset": { method: "POST", path: "/api/password-reset", body: { token: "REPLACE_ME", newPassword: "resetpass9" } },
+};
+
+// 试玩会话 cookie（前端内存态，模拟浏览器）
+let playCookie = null;
+
+function fillPlayOps() {
+  const sel = $("play-op");
+  sel.innerHTML = Object.keys(PLAY_OPS).map((k) => `<option>${k}</option>`).join("");
+}
+
+$("play-op").addEventListener("change", () => {
+  const op = PLAY_OPS[$("play-op").value];
+  $("play-body").value = op.body ? JSON.stringify(op.body, null, 2) : "";
+  $("play-output").textContent = "填写请求体后点击「发送」。";
+});
+
+$("btn-play-send").addEventListener("click", async () => {
+  const op = PLAY_OPS[$("play-op").value];
+  let data;
+  try {
+    data = $("play-body").value.trim() ? JSON.parse($("play-body").value) : undefined;
+  } catch {
+    alert("请求体不是合法 JSON");
+    return;
+  }
+  try {
+    const r = await api("/admin/api/play", {
+      method: "POST",
+      body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }),
+    });
+    $("play-output").textContent = `HTTP ${r.status}\n${r.body}`;
+    // 登录/登出/改密/改邮箱会设置或清除 cookie——模拟浏览器行为
+    if (r.setCookie) {
+      const m = /sid=([^;]+)/.exec(r.setCookie);
+      playCookie = m ? `sid=${m[1]}` : playCookie;
+      $("play-cookie").textContent = `会话 cookie：${playCookie}`;
+    }
+    if (op.path === "/api/logout" || op.path === "/api/change-password" || op.path === "/api/change-email" || op.path === "/api/password-reset") {
+      playCookie = null;
+      $("play-cookie").textContent = "会话 cookie：无（该操作已使会话失效）";
+    }
+  } catch (err) {
+    $("play-output").textContent = `请求失败：${err.message}`;
+  }
+});
+
+$("btn-play-clear").addEventListener("click", () => {
+  playCookie = null;
+  $("play-cookie").textContent = "会话 cookie：无";
+});
+
+// ---------------------------------------------------------------------------
+// 配置管理（密钥打码 / 显示切换 / 保存到本地文件）
+// ---------------------------------------------------------------------------
+
+/** 当前配置表单状态（key → 输入框元素）。 */
+const configInputs = {};
+
+async function loadConfigPanel() {
+  try {
+    const r = await api("/admin/api/config");
+    $("config-path").textContent = `写入位置：${r.localPath}`;
+    const list = $("config-list");
+    list.innerHTML = "";
+    for (const item of r.values) {
+      const row = document.createElement("div");
+      row.className = "review-item";
+      row.innerHTML = `
+        <div style="flex:1">
+          <div style="font-weight:600">${escapeHtml(item.label)} <code style="color:var(--muted)">${item.key}</code></div>
+          <div class="hint">来源：${item.source}${item.secret && item.hasValue ? " · 密钥已打码" : ""}</div>
+        </div>
+        <input type="text" style="flex:1.2;font-family:var(--mono)" placeholder="${item.secret ? "留空 = 删除该密钥" : "默认值：" + escapeHtml(item.fallback)}" />`;
+      const input = row.querySelector("input");
+      // 密钥不回填明文：只显示占位提示；非密钥回填当前值
+      if (!item.secret && item.hasValue) input.value = item.value;
+      if (item.secret) input.placeholder = item.hasValue ? "已配置（保存时留空 = 删除）" : "未配置（粘贴密钥）";
+      configInputs[item.key] = input;
+      list.appendChild(row);
+    }
+  } catch (err) {
+    $("config-path").textContent = `加载失败：${err.message}`;
+  }
+}
+
+$("btn-config-save").addEventListener("click", async () => {
+  const values = {};
+  for (const [key, input] of Object.entries(configInputs)) {
+    values[key] = input.value.trim(); // 空字符串 = 删除该 key
+  }
+  try {
+    const r = await api("/admin/api/config", { method: "PUT", body: JSON.stringify({ values }) });
+    $("config-msg").innerHTML = `<div class="msg ok">✅ 已保存到本地配置文件（不进入 git）</div>`;
+    // 重新加载面板（显示新来源标注）
+    await loadConfigPanel();
+  } catch (err) {
+    $("config-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -385,5 +582,7 @@ $("btn-new-unit").addEventListener("click", () => {
 
 $("btn-refresh").addEventListener("click", loadUnits);
 
+fillPlayOps();
 loadUnits();
 loadSourceList();
+loadConfigPanel();

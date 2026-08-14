@@ -143,6 +143,8 @@
       <button data-tab="ai">AI 契约生成</button>
       <button data-tab="ticket">Ticket</button>
       <button data-tab="source">源码浏览</button>
+      <button data-tab="play">试玩</button>
+      <button data-tab="config">配置</button>
     </nav>
 
     <!-- 概览 -->
@@ -163,11 +165,23 @@
         <h2 id="unit-title">单元详情（先在左侧选择单元）</h2>
         <div class="file-tabs" id="file-tabs"></div>
         <pre class="code" id="file-content">请在左侧选择一个功能单元。</pre>
+        <div id="edit-editor" style="display:none">
+          <textarea id="edit-content" style="min-height:280px;font-family:var(--mono);font-size:12.5px"></textarea>
+          <div class="row" style="margin-top:8px">
+            <input type="text" id="edit-note" placeholder="修改说明（必填，写入 git 提交信息）" style="flex:1" />
+            <button class="btn" id="btn-edit-save">保存（git 留痕）</button>
+            <button class="btn ghost" id="btn-edit-cancel">取消</button>
+          </div>
+          <div class="msg warn" style="margin-top:8px" id="edit-warning">正在编辑<span id="edit-warning-file"></span>。冻结区文件（契约/判据/规格）由人编辑是允许的，但每次保存都会留下 git 记录——请填写修改说明。</div>
+        </div>
         <div class="row" style="margin-top:12px">
           <button class="btn" id="btn-run-unit">运行本单元判据</button>
+          <button class="btn ghost" id="btn-edit-toggle">编辑当前文件</button>
+          <button class="btn ghost" id="btn-wiring">🔌 接线检查</button>
           <span id="unit-test-summary" class="hint"></span>
         </div>
         <div id="unit-test-output" class="output-box" style="margin-top:10px; display:none"></div>
+        <div id="wiring-result" style="margin-top:10px; display:none"></div>
       </div>
     </section>
 
@@ -233,6 +247,40 @@
           <button class="btn" id="btn-source-load">查看</button>
         </div>
         <pre class="code" id="source-content" style="margin-top:12px">选择文件后点击"查看"。</pre>
+      </div>
+    </section>
+
+    <!-- 试玩：业务冒烟 -->
+    <section class="panel" id="panel-play">
+      <div class="card">
+        <h2>试玩（业务冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）</h2>
+        <div class="hint">直接调用业务应用（内存存储，与 npm run dev 行为一致）。会话 cookie 自动保存在本面板。</div>
+        <div class="row" style="margin-top:10px">
+          <select id="play-op" style="flex:1"></select>
+          <button class="btn" id="btn-play-send">发送</button>
+        </div>
+        <label>请求体（JSON，可编辑）</label>
+        <textarea id="play-body" style="font-family:var(--mono);font-size:12.5px"></textarea>
+        <div class="row" style="margin-top:8px">
+          <span class="hint" id="play-cookie">会话 cookie：无</span>
+          <button class="btn ghost" id="btn-play-clear">清除 cookie</button>
+        </div>
+        <div class="msg" id="play-msg" style="display:none"></div>
+        <pre class="code" id="play-output" style="margin-top:10px">选择操作后点击"发送"。</pre>
+      </div>
+    </section>
+
+    <!-- 配置管理 -->
+    <section class="panel" id="panel-config">
+      <div class="card">
+        <h2>配置管理（密钥默认打码；写入本地文件，不进 git）</h2>
+        <div class="hint" id="config-path"></div>
+        <div id="config-list"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="btn-config-save">保存配置</button>
+          <span class="hint">优先级：本地配置 → 环境变量 → 默认值。密钥留空 = 删除该项。</span>
+        </div>
+        <div id="config-msg"></div>
       </div>
     </section>
   </main>

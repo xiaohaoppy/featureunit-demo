@@ -8,15 +8,38 @@ export const ROOT: string;
 export const GROUPS_DIR: string;
 export const GROUP: string;
 export const REVIEW_ITEMS: string[];
+export const LOCAL_CONFIG_PATH: string;
+export const CONFIG_KEYS: Array<{
+  key: string;
+  label: string;
+  secret: boolean;
+  fallback: string;
+}>;
 
 export function unitDir(name: string): string;
 export function pascal(kebab: string): string;
+export function camel(kebab: string): string;
 export function listUnits(): string[];
 export function readUnitFiles(name: string): {
   contract: string | null;
   spec: string | null;
   impl: string | null;
   test: string | null;
+};
+export function readLocalConfig(): Record<string, unknown>;
+export function writeLocalConfig(values: Record<string, string>): Record<string, unknown>;
+export function resolveConfigValue(key: string, fallback?: string): string;
+export function createUnit(name: string): { name: string; dir: string };
+export function saveUnitFile(
+  name: string,
+  file: "contract" | "spec" | "impl" | "test",
+  content: string,
+  note?: string,
+): { saved: boolean; committed: boolean; message: string };
+export function checkWiring(name: string): {
+  name: string;
+  checks: Array<{ label: string; ok: boolean }>;
+  allOk: boolean;
 };
 export function mockDraft(
   name: string,
