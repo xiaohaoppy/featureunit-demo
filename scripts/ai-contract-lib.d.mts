@@ -41,6 +41,14 @@ export function checkWiring(name: string): {
   checks: Array<{ label: string; ok: boolean }>;
   allOk: boolean;
 };
+export function generateWiring(name: string): {
+  alreadyWired: boolean;
+  files: Array<{ path: string; before: string; after: string; diffText: string }>;
+};
+export function applyWiring(
+  name: string,
+  note?: string,
+): { ok: boolean; message: string; applied: number };
 export function isJudgePlaceholder(test: string | null): boolean;
 export function isImplStub(impl: string | null): boolean;
 export function generateJudgeTest(

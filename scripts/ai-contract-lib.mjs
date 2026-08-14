@@ -19,8 +19,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 export const ROOT = resolve(import.meta.dirname, "..");
 export const GROUPS_DIR = join(ROOT, "src/groups");
@@ -455,6 +456,157 @@ export function unitStatus(name) {
     steps,
     stepsDone: steps.filter((s) => s.done).length,
     stepsTotal: steps.length,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 一键接线（组合根/HTTP/manifest 的改动由机器生成，人审 diff 后才落盘）
+// ---------------------------------------------------------------------------
+
+/** 在 content 中 anchor 行之后插入 toInsert；找不到 anchor 返回 null。 */
+function insertAfter(content, anchor, toInsert) {
+  const idx = content.indexOf(anchor);
+  if (idx === -1) return null;
+  const end = idx + anchor.length;
+  return content.slice(0, end) + "\n" + toInsert + content.slice(end);
+}
+
+/** 从契约文本提取 Deps 接口的字段名（AuthDeps 字段命名一致，可直接映射）。 */
+function extractDepsFields(contract) {
+  const m = /interface \w+Deps \{([\s\S]*?)\n\}/.exec(contract ?? "");
+  if (!m) return [];
+  return [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]);
+}
+
+/** 从契约文本提取输入 schema 字段名（用于判断是否走 cookie + body 字段）。 */
+function extractInputFields(contract) {
+  const m = /z\.object\(\{([\s\S]*?)\n\}\)/.exec(contract ?? "");
+  if (!m) return [];
+  return [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]);
+}
+
+/** 用 git 生成 unified diff（精确到 hunk，支持多点插入）。 */
+function simpleDiff(before, after) {
+  if (before === after) return "";
+  const dir = mkdtempSync(join(tmpdir(), "feat-diff-"));
+  const a = join(dir, "a");
+  const b = join(dir, "b");
+  writeFileSync(a, before);
+  writeFileSync(b, after);
+  const r = spawnSync("git", ["diff", "--no-index", "--no-color", "--", a, b], { encoding: "utf8" });
+  rmSync(dir, { recursive: true, force: true });
+  // 去掉 git diff 的文件头（diff --git / index / --- / +++），只留 hunk
+  return (r.stdout ?? "")
+    .replace(/^diff --git.*$/gm, "")
+    .replace(/^index .*$/gm, "")
+    .replace(/^--- .*$/gm, "")
+    .replace(/^\+\+\+ .*$/gm, "")
+    .trim();
+}
+
+/**
+ * 生成接线 diff（不落盘）：读契约推断依赖与输入，生成三处改动（index.ts /
+ * http.ts / manifest.json）的 before/after + 行级 diff，供人审阅。
+ * @returns { alreadyWired, files: [{path, before, after, diffText}] }
+ */
+export function generateWiring(name) {
+  const wiring = checkWiring(name);
+  if (wiring.allOk) return { alreadyWired: true, files: [] };
+
+  const files = readUnitFiles(name);
+  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+
+  const P = pascal(name);
+  const c = camel(name);
+  const depsFields = extractDepsFields(files.contract);
+  const inputFields = extractInputFields(files.contract);
+  const hasToken = inputFields.includes("token");
+
+  const results = [];
+
+  // ── ① index.ts（组合根）────────────────────────────────────────────
+  const index = readSourceFile("index.ts");
+  if (index && !wiring.checks[0].ok) {
+    let next = index;
+    next = insertAfter(next, `import { resetPassword } from "./features/reset-password/impl";`,
+      `import { ${c} } from "./features/${name}/impl";`);
+    next = insertAfter(next, `import type { ResetPasswordDeps } from "./features/reset-password/contract";`,
+      `import type { ${P}Deps } from "./features/${name}/contract";`);
+    next = insertAfter(next, `import { ResetPasswordInput } from "./features/reset-password/contract";`,
+      `import { ${P}Input } from "./features/${name}/contract";`);
+    next = insertAfter(next, `  resetPassword(input: unknown): Promise<void>;`,
+      `  ${c}(input: unknown): Promise<void>;`);
+    next = insertAfter(next, `    resetPassword: (input) => resetPassword(parseOrThrow(ResetPasswordInput, input), toResetPasswordDeps(deps)),`,
+      `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
+    const depArgs = depsFields.length ? depsFields.map((f) => `${f}: d.${f}`).join(", ") : "logger: d.logger";
+    next = insertAfter(next, `function toResetPasswordDeps(d: AuthDeps): ResetPasswordDeps {\n  return { resetTokens: d.resetTokens, users: d.users, sessions: d.sessions, hasher: d.hasher, logger: d.logger, now: d.now };\n}`,
+      `function to${P}Deps(d: AuthDeps): ${P}Deps {\n  return { ${depArgs} };\n}`);
+    if (next && next !== index) {
+      results.push({ path: "index.ts", before: index, after: next, diffText: simpleDiff(index, next) });
+    }
+  }
+
+  // ── ② http.ts（路由）──────────────────────────────────────────────
+  const http = readSourceFile("adapters/http.ts");
+  if (http && !wiring.checks[4].ok) {
+    const cookieLine = hasToken
+      ? `    const token = getCookie(c, SESSION_COOKIE);\n    if (!token) throw new AppError(ErrorCodes.INVALID_SESSION, 401);\n`
+      : "";
+    const callLine = hasToken
+      ? `    await api.${c}({ token, ...body });`
+      : `    await api.${c}(body);`;
+    const route = `  // ── ${name} ────────────────────────────────────────────────
+  app.post("/api/${name}", async (c) => {
+${cookieLine}    const body = (await readJson(c)) as Record<string, unknown>;
+${callLine}
+    return c.json({ ok: true });
+  });`;
+    const anchor = `  app.post("/api/password-reset", async (c) => {
+    await api.resetPassword(await readJson(c));
+    deleteCookie(c, SESSION_COOKIE); // 密码已重置，旧会话 cookie 一并清掉
+    return c.json({ ok: true });
+  });`;
+    const next = insertAfter(http, anchor, route);
+    if (next && next !== http) {
+      results.push({ path: "adapters/http.ts", before: http, after: next, diffText: simpleDiff(http, next) });
+    }
+  }
+
+  // ── ③ manifest.json（版本登记）─────────────────────────────────────
+  const manifest = readSourceFile("manifest.json");
+  if (manifest && !wiring.checks[5].ok) {
+    const anchor = `    "reset-password": "1.0.0"`;
+    const next = insertAfter(manifest, anchor, `    "${name}": "1.0.0"`);
+    if (next && next !== manifest) {
+      results.push({ path: "manifest.json", before: manifest, after: next, diffText: simpleDiff(manifest, next) });
+    }
+  }
+
+  return { alreadyWired: false, files: results };
+}
+
+/**
+ * 应用接线：把 generateWiring 生成的 after 写盘 + git 提交。
+ * 人看完 diff 点"确认"才调用——落盘权在人。
+ */
+export function applyWiring(name, note = "") {
+  const { alreadyWired, files } = generateWiring(name);
+  if (alreadyWired) return { ok: true, message: "该单元已接线，无需改动", applied: 0 };
+  if (!files.length) return { ok: false, message: "未能生成接线改动（锚点缺失或已接线），请人工检查", applied: 0 };
+
+  for (const f of files) {
+    // f.path 相对 auth-service 目录（如 "index.ts" / "adapters/http.ts" / "manifest.json"）
+    const full = join(GROUPS_DIR, GROUP, f.path);
+    writeFileSync(full, f.after);
+  }
+  spawnSync("git", ["add", "-A"], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `wire(${name}): 一键接线（人确认）${note ? " — " + note : ""}`], { cwd: ROOT });
+  return {
+    ok: commit.status === 0,
+    applied: files.length,
+    message: commit.status === 0
+      ? `已接线 ${files.length} 个文件并提交（${files.map((f) => f.path).join(", ")}）`
+      : `文件已写盘（${files.map((f) => f.path).join(", ")}），git 提交失败`,
   };
 }
 

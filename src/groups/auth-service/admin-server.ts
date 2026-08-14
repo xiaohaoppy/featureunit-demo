@@ -51,6 +51,8 @@ import {
   freezeJudge,
   implementUnit,
   unitStatus,
+  generateWiring,
+  applyWiring,
 } from "../../../scripts/ai-contract-lib.mjs";
 import { loadConfig } from "./config";
 import { buildDeps, createAuthApp } from "./index";
@@ -146,6 +148,28 @@ app.get("/admin/api/units/:name/wiring", (c) => {
   const files = readUnitFiles(name);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
   return c.json(checkWiring(name));
+});
+
+/** 一键接线：生成 diff（不落盘）——人审阅。 */
+app.get("/admin/api/units/:name/wiring/preview", (c) => {
+  const name = c.req.param("name");
+  try {
+    return c.json(generateWiring(name));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 一键接线：人确认后落盘 + git 提交。body = { note? } */
+app.post("/admin/api/units/:name/wiring/apply", async (c) => {
+  const name = c.req.param("name");
+  const body = await c.req.json().catch(() => ({}));
+  const { note } = body as { note?: string };
+  try {
+    return c.json(applyWiring(name, note ?? ""));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
 });
 
 /** 开发向导状态：契约冻结/判据/实现/接线/上线 五步进度。 */

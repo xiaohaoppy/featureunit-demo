@@ -438,10 +438,48 @@ $("btn-wiring").addEventListener("click", async () => {
   box.innerHTML = "检查中…";
   try {
     const r = await api(`/admin/api/units/${state.selectedUnit}/wiring`);
-    box.innerHTML = `<div class="msg ${r.allOk ? "ok" : "warn"}">${r.allOk ? "✅ 已完整接线" : "⚠️ 尚未完全接线（组合根由人编辑）"}</div>` +
-      `<div class="check-list">` +
-      r.checks.map((x) => `<div class="check-row"><span class="mark">${x.ok ? "✅" : "❌"}</span><span>${escapeHtml(x.label)}</span></div>`).join("") +
-      `</div>`;
+    let html = `<div class="msg ${r.allOk ? "ok" : "warn"}">${r.allOk ? "✅ 已完整接线" : "⚠️ 尚未完全接线"}</div>`;
+    html += `<div class="check-list">` + r.checks.map((x) => `<div class="check-row"><span class="mark">${x.ok ? "✅" : "❌"}</span><span>${escapeHtml(x.label)}</span></div>`).join("") + `</div>`;
+
+    if (!r.allOk) {
+      // 未接线 → 拉取一键接线 diff，展示"确认落盘"按钮
+      try {
+        const p = await api(`/admin/api/units/${state.selectedUnit}/wiring/preview`);
+        if (p.alreadyWired) {
+          html += `<div class="msg ok">已接线，无需改动。</div>`;
+        } else if (p.files.length) {
+          html += `<div class="msg warn">以下是机器生成的接线改动（<b>人审阅后点「确认接线」才落盘</b>）：</div>`;
+          for (const f of p.files) {
+            html += `<div style="font-weight:600;margin:8px 0 4px">${escapeHtml(f.path)}</div>`;
+            html += `<pre class="code" style="max-height:300px">${escapeHtml(f.diffText)}</pre>`;
+          }
+          html += `<div class="row" style="margin-top:10px"><button class="btn" id="btn-wire-apply">确认接线（落盘 + git 提交）</button><input type="text" id="wire-note" placeholder="接线说明（可选）" style="flex:1" /></div>`;
+        } else {
+          html += `<div class="msg err">无法生成接线改动（锚点缺失），请人工编辑组合根。</div>`;
+        }
+      } catch (e2) {
+        html += `<div class="msg err">接线预览失败：${escapeHtml(e2.message)}</div>`;
+      }
+    }
+    box.innerHTML = html;
+
+    // 绑定确认接线按钮
+    const applyBtn = $("btn-wire-apply");
+    if (applyBtn) {
+      applyBtn.addEventListener("click", async () => {
+        applyBtn.disabled = true;
+        try {
+          const res = await api(`/admin/api/units/${state.selectedUnit}/wiring/apply`, {
+            method: "POST",
+            body: JSON.stringify({ note: ($("wire-note")?.value ?? "").trim() }),
+          });
+          box.innerHTML = `<div class="msg ${res.ok ? "ok" : "err"}">${escapeHtml(res.message)}</div>`;
+          await loadUnits();
+        } catch (e3) {
+          box.innerHTML = `<div class="msg err">${escapeHtml(e3.message)}</div>`;
+        }
+      });
+    }
   } catch (err) {
     box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
   }
