@@ -35,4 +35,10 @@ export interface UserStore {
   create(user: User): Promise<void>;
   /** 更新密码哈希（改密 / 重置密码用）。id 不存在时静默忽略（幂等）。 */
   updatePasswordHash(id: string, hash: string): Promise<void>;
+  /**
+   * 更新邮箱（change-email 单元用）。id 不存在时静默忽略（幂等）。
+   * 注意：邮箱唯一性检查由【单元】负责（先 findByEmail 再更新），
+   *       端口不做约束——与 create 的语义保持一致。
+   */
+  updateEmail(id: string, email: string): Promise<void>;
 }

@@ -63,4 +63,12 @@ export class FileUserStore implements UserStore {
     users[idx] = { ...users[idx]!, passwordHash: hash };
     await this.save(users);
   }
+
+  async updateEmail(id: string, email: string): Promise<void> {
+    const users = await this.load();
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx === -1) return; // 幂等：不存在静默忽略
+    users[idx] = { ...users[idx]!, email };
+    await this.save(users);
+  }
 }

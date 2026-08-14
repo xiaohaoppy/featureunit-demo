@@ -42,4 +42,14 @@ export class MemoryUserStore implements UserStore {
     this.byEmail.set(updated.email, updated);
     this.byId.set(id, updated);
   }
+
+  async updateEmail(id: string, email: string): Promise<void> {
+    const existing = this.byId.get(id);
+    if (!existing) return; // 幂等：id 不存在静默忽略
+    const updated: User = { ...existing, email };
+    // 双索引同步：先删旧 email 键，再写新 email 键（避免旧键残留脏数据）
+    this.byEmail.delete(existing.email);
+    this.byEmail.set(updated.email, updated);
+    this.byId.set(id, updated);
+  }
 }
