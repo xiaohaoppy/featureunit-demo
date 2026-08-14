@@ -1,0 +1,25 @@
+{
+  /**
+   * TypeScript 配置说明（为什么这样配）：
+   * - strict + noUncheckedIndexedAccess：让编译器尽可能多地抓住 AI 代码的错。
+   *   类型约束越强，判据越硬——这是本框架"机器判据"的一部分。
+   * - noEmit：本项目只做类型检查（tsc --noEmit），运行时交给 vitest/tsx。
+   * - moduleResolution: Bundler：兼容 vitest/vite 的解析方式，import 无需写扩展名。
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地 npm 缓存（本机 npm 全局缓存不可写时的临时方案）
+.npm-cache/
+
+# FileUserStore 演示数据（生产环境的数据绝不能进 git）
+data/
+
+# 日志与系统文件
+*.log
+.DS_Store

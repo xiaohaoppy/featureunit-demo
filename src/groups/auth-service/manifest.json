@@ -1,0 +1,20 @@
+{
+  "name": "auth-service",
+  "description": "登录系统服务组：注册/登录/登出/当前用户/改密/找回密码",
+  "version": "0.1.0",
+  "owner": "human",
+  "features": {
+    "register-user": "1.0.0",
+    "login": "1.0.0",
+    "logout": "1.0.0",
+    "current-user": "1.0.0",
+    "change-password": "1.0.0",
+    "request-password-reset": "1.0.0",
+    "reset-password": "1.0.0"
+  },
+  "rules": {
+    "compositionRootOwner": "human",
+    "aiWritablePaths": ["**/impl.ts"],
+    "frozenPaths": ["**/contract.ts", "**/spec.md", "**/impl.test.ts", "ports/**", "index.ts"]
+  }
+}
