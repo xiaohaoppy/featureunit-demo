@@ -262,10 +262,12 @@ export function saveUnitFile(name, file, content, note = "") {
 // 判据生成（Agent-B）与内置实现器（Agent-C 自动迭代）
 // ---------------------------------------------------------------------------
 
-/** 判据是否为"占位"（未真正写测试）：含 expect(true) 且含 TODO。 */
+/** 判据是否为"占位"（未真正写测试）：去掉注释后，仍含 expect(true) 或 TODO。 */
 export function isJudgePlaceholder(test) {
   if (!test) return true;
-  return test.includes("expect(true)") && test.includes("TODO");
+  // 去注释再判断——注释里出现"expect(true)"字样不应触发占位判定
+  const code = test.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  return code.includes("expect(true)") || code.includes("TODO");
 }
 
 /** 实现是否还是桩（NOT_IMPLEMENTED）。 */
@@ -299,7 +301,7 @@ export async function generateJudgeTest(name, mock = true) {
     test = `/**
  * [角色] 功能单元：${name} —— 判据（草稿，模拟 AI 生成，未冻结）
  * 每条不变量一个 it；body 为显式 TODO（必红），请逐条补全断言。
- * 判据作者（Agent-B）纪律：禁止 expect(true) 占位、禁止改契约/实现。
+ * 判据作者（Agent-B）纪律：禁止占位断言、禁止改契约/实现。
  */
 
 import { describe, it, expect } from "vitest";
@@ -331,10 +333,14 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
 /**
  * 冻结判据：人确认后，在 impl.test.ts 头部写冻结记录 + git 提交。
  * 判据冻结后，实现者（Agent-C）才被允许对照它写 impl.ts。
+ * 纪律：占位判据（含 TODO/expect(true)）不允许冻结——考卷没写完不许开考。
  */
 export function freezeJudge(name, reviewer = "管理台操作员") {
   const path = join(unitDir(name), "impl.test.ts");
   if (!existsSync(path)) throw new Error(`判据文件不存在: ${name}/impl.test.ts`);
+  if (isJudgePlaceholder(readFileSync(path, "utf8"))) {
+    throw new Error("判据仍是占位（含 TODO / expect(true)）——请先逐条补全真实断言，再冻结");
+  }
   const record = `/**
  * 冻结记录（判据）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后冻结。
  * 冻结后任何修改必须走契约演进流程（改了判据 = 作弊，git 历史可追溯）。
