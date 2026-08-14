@@ -296,10 +296,19 @@ console.log(`草稿位置: ${join(dir, "contract.ts")}`);
 console.log(`          ${join(dir, "spec.md")}\n`);
 
 const rl = AUTO_YES ? null : createInterface({ input: process.stdin, output: process.stdout });
+const lineGen = rl ? rl[Symbol.asyncIterator]() : null; // 逐行流式读取：交互终端与管道输入都兼容
 const rejections = [];
 
 for (let i = 0; i < REVIEW_ITEMS.length; i++) {
-  const ok = AUTO_YES || (await rl.question(`  [${String(i + 1).padStart(2)}/10] ${REVIEW_ITEMS[i]} (y/n) > `)).trim().toLowerCase() === "y";
+  let ok;
+  if (AUTO_YES) {
+    ok = true; // --yes：自动化/演示模式，全部确认
+  } else {
+    process.stdout.write(`  [${String(i + 1).padStart(2)}/10] ${REVIEW_ITEMS[i]} (y/n) > `);
+    const { value, done } = await lineGen.next();
+    // EOF（done=true）按"打回"处理——没有明确确认 = 不通过（安全侧）
+    ok = !done && value.trim().toLowerCase() === "y";
+  }
   console.log(`         ${ok ? "✅ 通过" : "❌ 打回"}`);
   if (!ok) rejections.push(REVIEW_ITEMS[i]);
 }

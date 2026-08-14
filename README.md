@@ -113,6 +113,32 @@ npm run feat -- test login          # 只跑 login 的判据（AI 迭代用）
 npm run feat -- check               # 提交前总闸
 ```
 
+## 五·五、AI 帮你生成契约（人确认后才冻结）
+
+`feat ai-contract` 把 Agent-A（契约设计师）变成一条命令：**AI 生成草稿 → 机器初审 → 人逐条确认 → 冻结**。
+
+```bash
+# 1. 先生成单元
+npm run feat -- new delete-account
+
+# 2. AI 生成契约草稿（真实模式：需要 API Key）
+export AI_API_KEY=sk-...            # 或 DEEPSEEK_API_KEY；任意 OpenAI 兼容 API 均可
+npm run feat -- ai-contract delete-account "登录用户可以删除自己的账号（需验证密码）"
+
+# 演示模式（不调 API，内置模拟 AI 生成一份带典型缺陷的草稿，用来练评审）
+npm run feat -- ai-contract delete-account "登录用户可以删除自己的账号" --mock --yes
+```
+
+流程要点：
+
+1. **AI 只生成草稿**：prompt 就是 `docs/agent-prompts/01-contract-drafter.md` + 六要素模板；
+2. **机器初审**：结构检查（schema/不变量/错误码章节）+ 端口引用存在性 + tsc 全项目类型检查；
+3. **人逐条确认**：10 项评审清单逐条 y/n，**任一 n = 打回**，草稿不会进入 AI 实现队列；
+4. **冻结**：全过 → 契约文件头部写入冻结记录（生成方式/评审人/评审结果）+ git 提交；
+5. 之后照旧：写判据 → 发 ticket → AI 只写 impl.ts。
+
+可配置环境变量：`AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、`AI_MODEL`（默认 deepseek-chat）。
+
 ## 六、人为什么能负责（机制清单）
 
 1. **判据客观**：`impl.test.ts` 全绿 + `tsc` 通过 = 完成。机器判定，无需主观；
