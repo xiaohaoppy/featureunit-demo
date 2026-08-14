@@ -39,6 +39,8 @@ function usage(message) {
   if (message) console.error(`\n✗ ${message}\n`);
   console.error(`用法:
   feat new <功能名> [--group <组名>]    # 生成新功能单元（4 文件模板）
+  feat ai-contract <功能名> "<需求>" [--mock] [--yes]
+                                        # AI 生成契约草稿 → 机器初审 → 人确认 → 冻结
   feat test <功能名> [--group <组名>]   # 只跑该单元的判据
   feat check                            # 类型检查 + 全部测试
   feat ticket <功能名> [--group <组名>] # 打印该单元的 AI ticket`);
@@ -234,6 +236,13 @@ switch (cmd) {
   case "new": {
     if (!arg1) usage("feat new 需要功能名");
     cmdNew(arg1, parseGroup());
+    break;
+  }
+  case "ai-contract": {
+    if (!arg1) usage("feat ai-contract 需要功能名，例如: feat ai-contract delete-account \"登录用户可以删除自己的账号\" --mock");
+    // 委托给独立脚本（它有自己的评审交互与冻结流程）
+    const r = spawnSync("node", [join(ROOT, "scripts/ai-contract.mjs"), arg1, ...rest], { stdio: "inherit", cwd: ROOT });
+    process.exit(r.status ?? 1);
     break;
   }
   case "test": {
