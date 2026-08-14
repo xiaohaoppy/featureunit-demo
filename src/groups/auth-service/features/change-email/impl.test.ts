@@ -45,6 +45,9 @@ async function setup() {
   // 占用者
   await registerUser({ email: "b@b.com", password: "otherpass9" }, { users, hasher, logger });
 
+  // 清空 setup 阶段的日志（register/login 的日志不属于本单元的 PII 断言范围）
+  logger.calls.length = 0;
+
   return { users, sessions, hasher, logger, now: FIXED_NOW, token, userId: user.id };
 }
 
