@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck && npm run test",
     "dev": "tsx src/groups/auth-service/dev-server.ts",
+    "admin": "tsx src/groups/auth-service/admin-server.ts",
     "feat": "node scripts/feat.mjs"
   },
   "dependencies": {

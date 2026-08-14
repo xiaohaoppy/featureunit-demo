@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FeatureUnit 管理台</title>
+<style>
+  /* ============ 基础 ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f6fa; --panel: #ffffff; --border: #e2e5ee;
+    --text: #1f2430; --muted: #6b7385;
+    --accent: #2f6fed; --accent-weak: #eaf1ff;
+    --ok: #1a9e5c; --ok-weak: #e6f7ef;
+    --warn: #d97706; --warn-weak: #fef3e2;
+    --err: #d64545; --err-weak: #fdecec;
+    --mono: "SF Mono", "JetBrains Mono", Consolas, monospace;
+  }
+  body { background: var(--bg); color: var(--text); font: 14px/1.6 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  button { font: inherit; cursor: pointer; }
+  code, pre { font-family: var(--mono); }
+
+  /* ============ 布局 ============ */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header .logo { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; }
+  header h1 { font-size: 16px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+  .layout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; padding: 16px 20px; max-width: 1500px; margin: 0 auto; }
+  aside { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; height: fit-content; position: sticky; top: 72px; }
+  aside h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; }
+  #unit-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  #unit-list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  #unit-list li:hover { background: var(--bg); }
+  #unit-list li.active { background: var(--accent-weak); }
+  #unit-list .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex: none; }
+  #unit-list .dot.frozen { background: var(--ok); }
+  #unit-list .dot.draft { background: var(--warn); }
+  #unit-list .name { flex: 1; font-family: var(--mono); font-size: 13px; }
+  aside .side-btn { width: 100%; margin-top: 12px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+  aside .side-btn:hover { background: var(--bg); }
+
+  /* ============ 主区 ============ */
+  main { min-width: 0; }
+  .tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-bottom: 14px; flex-wrap: wrap; }
+  .tabs button { border: none; background: none; padding: 8px 14px; border-radius: 8px; color: var(--muted); }
+  .tabs button:hover { background: var(--bg); }
+  .tabs button.active { background: var(--accent); color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .unit-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: var(--panel); }
+  .unit-card h4 { font-family: var(--mono); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .unit-card .badges { margin: 8px 0; display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; }
+  .badge.ok { background: var(--ok-weak); color: var(--ok); }
+  .badge.warn { background: var(--warn-weak); color: var(--warn); }
+  .badge.err { background: var(--err-weak); color: var(--err); }
+  .badge.mute { background: var(--bg); color: var(--muted); }
+  .unit-card .meta { color: var(--muted); font-size: 12px; }
+
+  /* 文件查看 */
+  .file-tabs { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+  .file-tabs button { border: 1px solid var(--border); background: var(--panel); padding: 5px 12px; border-radius: 6px; font-size: 12px; font-family: var(--mono); }
+  .file-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  pre.code { background: #141821; color: #d8e0f0; padding: 14px; border-radius: 8px; overflow: auto; max-height: 520px; font-size: 12.5px; line-height: 1.55; }
+  .output-box { background: #141821; color: #9fe8c0; padding: 12px 14px; border-radius: 8px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow: auto; }
+
+  /* 表单 */
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], textarea, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--panel);
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; border: none; border-radius: 8px; background: var(--accent); color: #fff; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+  .btn.danger { background: var(--err); }
+
+  /* 评审清单 */
+  .review-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; background: var(--panel); }
+  .review-item .idx { font-family: var(--mono); color: var(--muted); font-size: 12px; width: 30px; flex: none; }
+  .review-item .text { flex: 1; }
+  .review-item .choice { display: flex; gap: 6px; flex: none; }
+  .review-item button { border: 1px solid var(--border); background: var(--panel); padding: 4px 12px; border-radius: 6px; font-size: 12px; }
+  .review-item button.on-y { background: var(--ok-weak); color: var(--ok); border-color: var(--ok); }
+  .review-item button.on-n { background: var(--err-weak); color: var(--err); border-color: var(--err); }
+
+  .msg { padding: 10px 14px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+  .msg.ok { background: var(--ok-weak); color: var(--ok); }
+  .msg.err { background: var(--err-weak); color: var(--err); }
+  .msg.warn { background: var(--warn-weak); color: var(--warn); }
+
+  .check-list { display: grid; gap: 6px; margin: 8px 0; }
+  .check-row { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+  .check-row .mark { font-family: var(--mono); width: 22px; }
+  .hint { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">FU</div>
+  <div>
+    <h1>FeatureUnit 管理台</h1>
+    <div class="sub" id="group-label">auth-service · 加载中…</div>
+  </div>
+  <div class="right">
+    <button class="btn ghost" id="btn-run-all">运行全部判据</button>
+    <button class="btn ghost" id="btn-refresh">刷新</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- 左侧：功能单元列表 -->
+  <aside>
+    <h3>功能单元</h3>
+    <ul id="unit-list"></ul>
+    <button class="side-btn" id="btn-new-unit">＋ 新功能单元（feat new）</button>
+    <div class="hint" style="margin-top:8px" id="legend">
+      <span class="badge ok">● 已冻结</span>
+      <span class="badge warn">● 草稿</span>
+      <span class="badge mute">● 未生成</span>
+    </div>
+  </aside>
+
+  <!-- 右侧：功能面板 -->
+  <main>
+    <nav class="tabs">
+      <button data-tab="overview" class="active">概览</button>
+      <button data-tab="unit">单元详情</button>
+      <button data-tab="ai">AI 契约生成</button>
+      <button data-tab="ticket">Ticket</button>
+      <button data-tab="source">源码浏览</button>
+    </nav>
+
+    <!-- 概览 -->
+    <section class="panel active" id="panel-overview">
+      <div class="card">
+        <h2>服务组概览</h2>
+        <div class="grid" id="overview-grid"></div>
+      </div>
+      <div class="card">
+        <h2>总闸输出</h2>
+        <div id="overview-output" class="output-box">点击"运行全部判据"查看总闸结果。</div>
+      </div>
+    </section>
+
+    <!-- 单元详情 -->
+    <section class="panel" id="panel-unit">
+      <div class="card">
+        <h2 id="unit-title">单元详情（先在左侧选择单元）</h2>
+        <div class="file-tabs" id="file-tabs"></div>
+        <pre class="code" id="file-content">请在左侧选择一个功能单元。</pre>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="btn-run-unit">运行本单元判据</button>
+          <span id="unit-test-summary" class="hint"></span>
+        </div>
+        <div id="unit-test-output" class="output-box" style="margin-top:10px; display:none"></div>
+      </div>
+    </section>
+
+    <!-- AI 契约生成 -->
+    <section class="panel" id="panel-ai">
+      <div class="card">
+        <h2>AI 生成契约（Agent-A）→ 机器初审 → 人评审 → 冻结</h2>
+        <div class="row">
+          <div style="flex:1">
+            <label>功能单元名（kebab-case，需先 feat new）</label>
+            <input type="text" id="ai-name" placeholder="如 delete-account" />
+          </div>
+          <div style="flex:1">
+            <label>生成模式</label>
+            <select id="ai-mode">
+              <option value="mock">演示模式（内置模拟 AI，不调 API）</option>
+              <option value="live">真实模式（需设置 AI_API_KEY）</option>
+            </select>
+          </div>
+        </div>
+        <label>一句话需求</label>
+        <textarea id="ai-req" placeholder="如：登录用户可以删除自己的账号（敏感操作，需验证密码）"></textarea>
+        <button class="btn" id="btn-ai-generate">① 生成草稿</button>
+        <div id="ai-msg"></div>
+      </div>
+
+      <div class="card" id="ai-draft-card" style="display:none">
+        <h2>草稿 + 机器初审</h2>
+        <div class="check-list" id="ai-checks"></div>
+        <div class="file-tabs" id="ai-file-tabs"></div>
+        <pre class="code" id="ai-draft-content"></pre>
+      </div>
+
+      <div class="card" id="ai-review-card" style="display:none">
+        <h2>③ 人评审确认（冻结权在人：10 项逐条 y/n，任一 n = 打回）</h2>
+        <div id="ai-review-list"></div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn" id="btn-ai-freeze">④ 全部通过 → 冻结</button>
+          <button class="btn ghost" id="btn-ai-reject">打回（有 n 时）</button>
+        </div>
+        <div id="ai-freeze-msg"></div>
+      </div>
+    </section>
+
+    <!-- Ticket -->
+    <section class="panel" id="panel-ticket">
+      <div class="card">
+        <h2>AI Ticket（发给实现者的任务单）</h2>
+        <label>选择功能单元</label>
+        <select id="ticket-unit"></select>
+        <button class="btn" id="btn-ticket-load" style="margin-top:10px">生成 Ticket</button>
+        <button class="btn ghost" id="btn-ticket-copy">复制全文</button>
+        <pre class="code" id="ticket-content" style="margin-top:12px">选择单元后点击"生成 Ticket"。</pre>
+      </div>
+    </section>
+
+    <!-- 源码浏览 -->
+    <section class="panel" id="panel-source">
+      <div class="card">
+        <h2>源码浏览（冻结区：端口 / 适配器 / 组合根 / 配置）</h2>
+        <div class="row">
+          <select id="source-file" style="flex:1"></select>
+          <button class="btn" id="btn-source-load">查看</button>
+        </div>
+        <pre class="code" id="source-content" style="margin-top:12px">选择文件后点击"查看"。</pre>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="/admin/app.js"></script>
+</body>
+</html>

@@ -76,9 +76,14 @@ featureunit-demo/
 
 ```bash
 npm install
-npm run check    # 类型检查 + 全部测试（应全绿：~30 个用例）
-npm run dev      # 启动服务：http://localhost:3000
+npm run check    # 类型检查 + 全部测试（应全绿：43 个用例）
+npm run dev      # 启动业务服务：http://localhost:3000
+npm run admin    # 启动管理台：http://localhost:3001/admin
 ```
+
+**管理台**（`npm run admin`）把框架的日常动作收进一个页面：
+单元总览（冻结状态）· 单元详情（4 文件查看）· 运行判据（单单元/全部）·
+AI 生成契约（草稿 → 机器初审 → 10 项人评审 → 冻结）· Ticket 查看复制 · 源码浏览。
 
 冒烟测试（另开终端）：
 
