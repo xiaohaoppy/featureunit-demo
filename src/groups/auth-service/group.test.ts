@@ -139,6 +139,33 @@ describe("auth-service 组判据（端到端，HTTP 层）", () => {
     expect(await errorOf(replay)).toBe("RESET_TOKEN_INVALID");
   });
 
+  it("改邮箱端到端：改后旧 cookie 失效、旧邮箱登录被拒、新邮箱可登录；占用他人邮箱 → 409", async () => {
+    // 两个用户：a@b.com 是改邮箱的主角，b@b.com 是"被占用"的受害者
+    await post("/api/register", { email: "a@b.com", password: "secret123" });
+    await post("/api/register", { email: "b@b.com", password: "otherpass9" });
+    const loginRes = await post("/api/login", { email: "a@b.com", password: "secret123" });
+    const cookie = cookieFrom(loginRes);
+
+    // ① 新邮箱被 b 占用 → 409 EMAIL_TAKEN，cookie 仍有效（数据零变更）
+    const taken = await post("/api/change-email", { currentPassword: "secret123", newEmail: "b@b.com" }, cookie);
+    expect(taken.status).toBe(409);
+    expect(await errorOf(taken)).toBe("EMAIL_TAKEN");
+    expect((await get("/api/me", cookie)).status).toBe(200);
+
+    // ② 旧密码错误 → 401 WRONG_PASSWORD
+    const badPw = await post("/api/change-email", { currentPassword: "wrong", newEmail: "new@b.com" }, cookie);
+    expect(badPw.status).toBe(401);
+
+    // ③ 正确改邮箱 → 200；旧会话立即失效（含当前 cookie）
+    const ok = await post("/api/change-email", { currentPassword: "secret123", newEmail: "new@b.com" }, cookie);
+    expect(ok.status).toBe(200);
+    expect((await get("/api/me", cookie)).status).toBe(401);
+
+    // ④ 旧邮箱不能再登录；新邮箱可以
+    expect((await post("/api/login", { email: "a@b.com", password: "secret123" })).status).toBe(401);
+    expect((await post("/api/login", { email: "new@b.com", password: "secret123" })).status).toBe(200);
+  });
+
   it("防枚举：不存在的邮箱请求重置 → 200 且没有邮件发出", async () => {
     const mail = deps.mail as MemoryEmailSender;
     const res = await post("/api/password-reset/request", { email: "nobody@b.com" });
