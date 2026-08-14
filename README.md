@@ -4,6 +4,16 @@
 > 很多小功能组合成一个服务组（Service Group）。
 > **人要为 AI 的产品负责**——所以本仓库的每一行都写明了"谁能改、为什么、判据是什么"。
 
+## 📚 文档导航
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/FEATUREUNIT-GUIDE.md`](docs/FEATUREUNIT-GUIDE.md) | **框架完整指南**：理念、概念分层、五个机制、契约体系、错误协议、配置安全、适用边界、语言选型、AI 工作流 |
+| [`docs/TUTORIAL.md`](docs/TUTORIAL.md) | **上手教程**：从"拆需求"到"功能上线"的 10 步实操（真实案例 change-email） |
+| [`docs/contract-template.md`](docs/contract-template.md) | 契约六要素模板（写契约的输入） |
+| [`docs/contract-review-checklist.md`](docs/contract-review-checklist.md) | 契约评审清单（10 条，冻结前必过） |
+| [`docs/agent-prompts/`](docs/agent-prompts/) | 三条固定 AI prompt：契约设计师 / 独立评审员 / 单元实现者（ticket） |
+
 ## 一、30 秒看懂
 
 ```
