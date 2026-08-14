@@ -114,6 +114,16 @@ export function createHttpApp(api: AuthApi): Hono {
     return c.json({ ok: true });
   });
 
+  // ── 修改邮箱（敏感操作：body 必须带旧密码，见 change-email 契约）──────────
+  app.post("/api/change-email", async (c) => {
+    const token = getCookie(c, SESSION_COOKIE);
+    if (!token) throw new AppError(ErrorCodes.INVALID_SESSION, 401);
+    const body = (await readJson(c)) as Record<string, unknown>;
+    await api.changeEmail({ token, ...body });
+    deleteCookie(c, SESSION_COOKIE); // 邮箱已变，当前 cookie 一并失效
+    return c.json({ ok: true });
+  });
+
   // ── 找回密码：请求重置链接（防枚举：无论邮箱是否存在都返回 200）───────────
   app.post("/api/password-reset/request", async (c) => {
     await api.requestPasswordReset(await readJson(c));

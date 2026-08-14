@@ -39,6 +39,7 @@ import { login } from "./features/login/impl";
 import { logout } from "./features/logout/impl";
 import { currentUser } from "./features/current-user/impl";
 import { changePassword } from "./features/change-password/impl";
+import { changeEmail } from "./features/change-email/impl";
 import { requestPasswordReset } from "./features/request-password-reset/impl";
 import { resetPassword } from "./features/reset-password/impl";
 
@@ -48,6 +49,7 @@ import type { LoginDeps } from "./features/login/contract";
 import type { LogoutDeps } from "./features/logout/contract";
 import type { CurrentUserDeps } from "./features/current-user/contract";
 import type { ChangePasswordDeps } from "./features/change-password/contract";
+import type { ChangeEmailDeps } from "./features/change-email/contract";
 import type { RequestPasswordResetDeps } from "./features/request-password-reset/contract";
 import type { ResetPasswordDeps } from "./features/reset-password/contract";
 
@@ -56,6 +58,7 @@ import { LoginInput } from "./features/login/contract";
 import { LogoutInput } from "./features/logout/contract";
 import { CurrentUserInput } from "./features/current-user/contract";
 import { ChangePasswordInput } from "./features/change-password/contract";
+import { ChangeEmailInput } from "./features/change-email/contract";
 import { RequestPasswordResetInput } from "./features/request-password-reset/contract";
 import { ResetPasswordInput } from "./features/reset-password/contract";
 
@@ -131,6 +134,7 @@ export interface AuthApi {
   logout(input: unknown): Promise<void>;
   me(input: unknown): Promise<{ id: string; email: string }>;
   changePassword(input: unknown): Promise<void>;
+  changeEmail(input: unknown): Promise<void>;
   requestPasswordReset(input: unknown): Promise<void>;
   resetPassword(input: unknown): Promise<void>;
 }
@@ -147,6 +151,7 @@ export function createAuthApp(deps: AuthDeps): AuthApi {
     logout: (input) => logout(parseOrThrow(LogoutInput, input), toLogoutDeps(deps)),
     me: (input) => currentUser(parseOrThrow(CurrentUserInput, input), toCurrentUserDeps(deps)),
     changePassword: (input) => changePassword(parseOrThrow(ChangePasswordInput, input), toChangePasswordDeps(deps)),
+    changeEmail: (input) => changeEmail(parseOrThrow(ChangeEmailInput, input), toChangeEmailDeps(deps)),
     requestPasswordReset: (input) => requestPasswordReset(parseOrThrow(RequestPasswordResetInput, input), toRequestResetDeps(deps)),
     resetPassword: (input) => resetPassword(parseOrThrow(ResetPasswordInput, input), toResetPasswordDeps(deps)),
   };
@@ -166,6 +171,9 @@ function toCurrentUserDeps(d: AuthDeps): CurrentUserDeps {
   return { sessions: d.sessions, users: d.users, now: d.now };
 }
 function toChangePasswordDeps(d: AuthDeps): ChangePasswordDeps {
+  return { sessions: d.sessions, users: d.users, hasher: d.hasher, logger: d.logger, now: d.now };
+}
+function toChangeEmailDeps(d: AuthDeps): ChangeEmailDeps {
   return { sessions: d.sessions, users: d.users, hasher: d.hasher, logger: d.logger, now: d.now };
 }
 function toRequestResetDeps(d: AuthDeps): RequestPasswordResetDeps {

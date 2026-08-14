@@ -9,6 +9,7 @@
     "logout": "1.0.0",
     "current-user": "1.0.0",
     "change-password": "1.0.0",
+    "change-email": "1.0.0",
     "request-password-reset": "1.0.0",
     "reset-password": "1.0.0"
   },
