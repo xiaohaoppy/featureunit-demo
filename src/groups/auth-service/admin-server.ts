@@ -33,6 +33,8 @@ import {
   CONFIG_KEYS,
   listGroups,
   createGroup,
+  portList,
+  createPort,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -298,6 +300,23 @@ app.post("/admin/api/units/:name/rollback", async (c) => {
 /** 端口依赖矩阵：每个单元依赖哪些端口。 */
 app.get("/admin/api/ports/map", (c) => {
   return c.json(portDependencyMap(groupOf(c)));
+});
+
+/** 端口统一管理：列表（一句话/依赖单元/适配器实现）。 */
+app.get("/admin/api/ports", (c) => {
+  return c.json(portList(groupOf(c)));
+});
+
+/** 新建端口（冻结区模板）：body = { name, description }。 */
+app.post("/admin/api/ports", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { name, description } = body as { name?: string; description?: string };
+  try {
+    const r = createPort(name ?? "", description ?? "", groupOf(c));
+    return c.json({ ok: true, ...r });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
 });
 
 /** 错误码一致性检查：spec 声明 vs impl 抛出 vs errors.ts 定义。 */

@@ -874,12 +874,77 @@ $("btn-errorcodes").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// 端口统一管理（列表/详情/新建）
+// ---------------------------------------------------------------------------
+
+async function loadPorts() {
+  const grid = $("port-grid");
+  grid.innerHTML = "加载中…";
+  try {
+    const r = await api("/admin/api/ports");
+    if (!r.ports.length) {
+      grid.innerHTML = `<span class="hint">（该组还没有端口）</span>`;
+      return;
+    }
+    grid.innerHTML = "";
+    for (const p of r.ports) {
+      const card = document.createElement("div");
+      card.className = "unit-card";
+      card.innerHTML = `
+        <h4>${escapeHtml(p.name)} <code style="color:var(--muted);font-size:11px">${escapeHtml(p.interfaceName)}</code></h4>
+        <div class="hint" style="margin:6px 0">${escapeHtml(p.description)}</div>
+        <div class="badges">
+          <span class="badge mute">📌 依赖 ${p.usedBy.length} 单元</span>
+          <span class="badge mute">🔧 适配器 ${p.adapters.length}</span>
+        </div>
+        <div class="hint" style="margin-top:6px">${p.usedBy.map((u) => `<code>${escapeHtml(u)}</code>`).join(" ")}</div>`;
+      card.addEventListener("click", async () => {
+        $("port-detail-card").style.display = "block";
+        $("port-detail-title").textContent = `端口详情：${p.name}（${p.interfaceName}）`;
+        $("port-detail-content").textContent = "加载中…";
+        try {
+          const src = await api(`/admin/api/source?file=ports/${p.name}.ts`);
+          const adapterLine = p.adapters.length
+            ? `\n\n—— 适配器实现：\n${p.adapters.map((a) => `  ${a}`).join("\n")}`
+            : "\n\n—— ⚠️ 暂无适配器实现（单元将无法注入该端口）";
+          $("port-detail-content").textContent = src.content + adapterLine;
+        } catch (err) {
+          $("port-detail-content").textContent = `加载失败：${err.message}`;
+        }
+      });
+      grid.appendChild(card);
+    }
+  } catch (err) {
+    grid.innerHTML = `<span class="msg err">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+$("btn-port-create").addEventListener("click", async () => {
+  const name = $("port-new-name").value.trim();
+  const description = $("port-new-desc").value.trim();
+  if (!name || !/^[a-z0-9-]+$/.test(name)) {
+    $("port-msg").innerHTML = `<div class="msg err">端口名只允许小写字母/数字/连字符</div>`;
+    return;
+  }
+  try {
+    const r = await api("/admin/api/ports", { method: "POST", body: JSON.stringify({ name, description }) });
+    $("port-msg").innerHTML = `<div class="msg ok">✅ 已创建端口 ${r.interfaceName}（冻结区模板，请人工填写接口方法）</div>`;
+    $("port-new-name").value = "";
+    $("port-new-desc").value = "";
+    await loadPorts();
+  } catch (err) {
+    $("port-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------
 
 $("btn-refresh").addEventListener("click", () => {
   loadUnits();
   loadPortMatrix();
+  loadPorts();
 });
 
 loadGroups();
@@ -888,4 +953,5 @@ fillWizardSelect();
 loadUnits();
 loadSourceList();
 loadPortMatrix();
+loadPorts();
 loadConfigPanel();

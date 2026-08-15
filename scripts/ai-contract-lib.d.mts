@@ -22,6 +22,21 @@ export function pascal(kebab: string): string;
 export function camel(kebab: string): string;
 export function listGroups(): string[];
 export function createGroup(name: string): { name: string; dir: string };
+export function portList(group?: string): {
+  group: string;
+  ports: Array<{
+    name: string;
+    interfaceName: string;
+    description: string;
+    usedBy: string[];
+    adapters: string[];
+  }>;
+};
+export function createPort(
+  name: string,
+  description: string,
+  group?: string,
+): { name: string; path: string; interfaceName: string };
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

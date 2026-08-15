@@ -150,6 +150,7 @@
       <button data-tab="source">源码浏览</button>
       <button data-tab="play">试玩</button>
       <button data-tab="wizard">向导</button>
+      <button data-tab="ports">端口</button>
       <button data-tab="config">配置</button>
     </nav>
 
@@ -303,6 +304,27 @@
           <button class="btn" id="btn-wizard-load">查看进度</button>
         </div>
         <div id="wizard-body" style="margin-top:14px"></div>
+      </div>
+    </section>
+
+    <!-- 端口统一管理 -->
+    <section class="panel" id="panel-ports">
+      <div class="card">
+        <h2>端口统一管理（冻结区：接口只读，新建由人确认）</h2>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="port-new-name" placeholder="端口名（kebab-case，如 token-verifier）" style="flex:1" />
+          <input type="text" id="port-new-desc" placeholder="一句话用途（写入文件头）" style="flex:1.5" />
+          <button class="btn" id="btn-port-create">＋ 新建端口</button>
+        </div>
+        <div id="port-msg"></div>
+      </div>
+      <div class="card">
+        <h2>端口清单（📌 依赖它的单元 ｜ 🔧 适配器实现）</h2>
+        <div class="grid" id="port-grid"></div>
+      </div>
+      <div class="card" id="port-detail-card" style="display:none">
+        <h2 id="port-detail-title">端口详情</h2>
+        <pre class="code" id="port-detail-content"></pre>
       </div>
     </section>
 

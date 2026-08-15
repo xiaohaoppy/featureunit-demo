@@ -1202,3 +1202,100 @@ export function createGroup(name) {
 
   return { name, dir };
 }
+
+// ---------------------------------------------------------------------------
+// 端口统一管理（列表/依赖/适配器/新建）
+// ---------------------------------------------------------------------------
+
+/** 从端口文件头提取"一句话：..."用途描述。 */
+function portDescription(content) {
+  const m = /一句话[:：]\s*([^\n*]+)/.exec(content ?? "");
+  return m ? m[1].trim() : "（未写用途说明）";
+}
+
+/**
+ * 端口列表：扫描 ports/ 目录，汇总每个端口的
+ * 一句话用途 / 依赖它的单元 / 实现了它的适配器。
+ */
+export function portList(group = GROUP) {
+  const portsDir = join(GROUPS_DIR, group, "ports");
+  if (!existsSync(portsDir)) return { group, ports: [] };
+
+  // 单元 → 端口 反向依赖
+  const unitPorts = listUnits(group).map((u) => ({
+    unit: u,
+    ports: [...(readUnitFiles(u, group).contract ?? "").matchAll(/from "(?:\.\.\/)+ports\/([a-z-]+)"/g)].map((m) => m[1]),
+  }));
+
+  // 适配器扫描：adapters/**/*.ts 里 implements <接口名> 的实现
+  const adapters = [];
+  const walk = (rel) => {
+    const dir = join(GROUPS_DIR, group, "adapters", rel);
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(r);
+      else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+        const content = readFileSync(join(dir, entry.name), "utf8");
+        const impls = [...content.matchAll(/implements\s+(\w+)/g)].map((m) => m[1]);
+        if (impls.length) adapters.push({ path: r, impls });
+      }
+    }
+  };
+  walk("");
+
+  const ports = readdirSync(portsDir, { withFileTypes: true })
+    .filter((d) => d.isFile() && d.name.endsWith(".ts") && !d.name.endsWith(".test.ts"))
+    .map((d) => {
+      const name = d.name.replace(/\.ts$/, "");
+      const interfaceName = pascal(name);
+      const content = readFileSync(join(portsDir, d.name), "utf8");
+      return {
+        name,
+        interfaceName,
+        description: portDescription(content),
+        usedBy: unitPorts.filter((u) => u.ports.includes(name)).map((u) => u.unit),
+        adapters: adapters.filter((a) => a.impls.includes(interfaceName)).map((a) => a.path),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { group, ports };
+}
+
+/**
+ * 新建端口：ports/<name>.ts 接口模板（冻结区——人创建，AI 不许碰）。
+ * @param name kebab-case 端口名（如 token-verifier）
+ * @param description 一句话用途（写入文件头）
+ */
+export function createPort(name, description, group = GROUP) {
+  if (!/^[a-z0-9-]+$/.test(name)) {
+    throw new Error("端口名只允许小写字母、数字、连字符（kebab-case）");
+  }
+  const P = pascal(name);
+  const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
+  if (existsSync(path)) {
+    throw new Error(`端口已存在: ${group}/ports/${name}.ts`);
+  }
+  const content = `/**
+ * ============================================================================
+ * [角色] 端口：${P} —— ${description ?? "（待补用途说明）"}
+ * ----------------------------------------------------------------------------
+ * 谁可以改：只有人（契约演进流程）。AI 实现任务中禁止修改本文件。
+ * 纪律：
+ *   - 只允许纯数据 + 接口，禁止任何实现代码（这是端口，不是实现）；
+ *   - 禁止引入 ORM / HTTP / 框架类型；
+ *   - 语义必须能被内存适配器完整模拟（否则单元无法独立测试）；
+ *   - 不可控因素（时钟/随机数）设计成注入，测试才能固定时间。
+ * ============================================================================
+ */
+
+// TODO(人/契约设计师)：定义端口接口。示例：
+//   findByEmail(email: string): Promise<Xxx | null>;
+export interface ${P} {
+  // 待填：端口方法（语义见文件头"一句话"）
+}
+`;
+  writeFileSync(path, content);
+  return { name, path, interfaceName: P };
+}
