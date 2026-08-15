@@ -692,15 +692,24 @@ function buildPrompt(name, requirement) {
 }
 
 /** 内置模拟 AI：生成一份"典型第一版草稿"——结构齐全但带着真实缺陷，供评审环节抓问题。 */
-export function mockDraft(name, requirement) {
+export function mockDraft(name, requirement, group = GROUP) {
+  // 只引用目标组里真实存在的端口（新组只有 errors/logger，避免硬编码 auth 端口）
+  const portsDir = join(GROUPS_DIR, group, "ports");
+  const has = (f) => existsSync(join(portsDir, f));
+  const imports = [];
+  const depFields = [];
+  if (has("user-store.ts")) { imports.push('import type { UserStore } from "../../ports/user-store";'); depFields.push("  users: UserStore;"); }
+  if (has("session-store.ts")) { imports.push('import type { SessionStore } from "../../ports/session-store";'); depFields.push("  sessions: SessionStore;"); }
+  if (has("email-sender.ts")) { imports.push('import type { EmailSender } from "../../ports/email-sender";'); depFields.push("  mail: EmailSender;"); }
+  imports.push('import type { Logger } from "../../ports/logger";');
+  depFields.push("  logger: Logger;");
+
   const ts = `/**
  * [角色] 功能单元：${name} —— 契约（草稿 v0.1，模拟 AI 生成，未冻结）
  */
 
 import { z } from "zod";
-import type { UserStore } from "../../ports/user-store";
-import type { SessionStore } from "../../ports/session-store";
-import type { Logger } from "../../ports/logger";
+${imports.join("\n")}
 
 export const ${pascal(name)}Input = z.object({
   token: z.string().min(1),
@@ -710,9 +719,7 @@ export const ${pascal(name)}Input = z.object({
 export type ${pascal(name)}Input = z.infer<typeof ${pascal(name)}Input>;
 
 export interface ${pascal(name)}Deps {
-  users: UserStore;
-  sessions: SessionStore;
-  logger: Logger;
+${depFields.join("\n")}
 }
 
 export interface ${pascal(name)} {
@@ -800,10 +807,14 @@ export async function generateDraft(name, requirement, mock = true, group = GROU
   if (!existsSync(join(dir, "contract.ts"))) {
     throw new Error(`功能单元不存在: ${group}/features/${name}（请先执行 feat new ${name}）`);
   }
+  // 纪律守卫：已冻结的契约不允许被 AI 生成重写（与判据/端口守卫一致）
+  if (readFileSync(join(dir, "contract.ts"), "utf8").includes("冻结记录")) {
+    throw new Error(`契约已冻结（${group}/features/${name}）——不允许被 AI 生成覆盖，请走契约演进流程`);
+  }
 
   let ts, md, source;
   if (mock) {
-    ({ ts, md } = mockDraft(name, requirement));
+    ({ ts, md } = mockDraft(name, requirement, group));
     source = "mock";
   } else {
     const text = await callLLM(buildPrompt(name, requirement));
