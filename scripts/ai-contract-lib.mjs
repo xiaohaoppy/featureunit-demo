@@ -296,6 +296,12 @@ function extractInvariants(contract) {
 export async function generateJudgeTest(name, mock = true, group = GROUP) {
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
+
+  // 纪律守卫：已冻结的判据不允许被 AI 生成重写（改了判据 = 作弊）。
+  // 需要重写必须走契约演进流程（git 历史可追溯）。
+  if ((files.test ?? "").includes("冻结记录")) {
+    throw new Error("判据已冻结——不允许被 AI 生成覆盖。如需修改请走契约演进流程（人工编辑 + git 留痕）");
+  }
   const contract = files.contract;
 
   let test;

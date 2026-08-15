@@ -665,6 +665,12 @@ function aiWorkOut(text) {
 
 $("btn-judge").addEventListener("click", async () => {
   if (!state.selectedUnit) return;
+  // 已冻结的判据会被后端拒绝——前端提前确认，避免困惑
+  const current = state.unitFiles?.test ?? "";
+  if (current.includes("冻结记录")) {
+    alert("该单元判据已冻结——不允许被 AI 生成覆盖（纪律守卫）。如需修改请走契约演进流程。");
+    return;
+  }
   const btn = $("btn-judge");
   btn.disabled = true;
   btn.textContent = "生成中…";
