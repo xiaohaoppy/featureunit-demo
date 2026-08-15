@@ -147,13 +147,29 @@ export AI_MODEL=deepseek-chat                 # 可选
 npm run check                          # 总闸：tsc + 全部测试
 npm run dev                            # 业务服务 :3000
 npm run admin                          # 管理台 :3001/admin
-npm run feat -- new <名字>              # 开新功能单元
+npm run feat -- new-group <组名>        # 创建新服务组骨架（多组支持）
+npm run feat -- new <名字> [--group <组名>]   # 开新功能单元（默认 auth-service）
 npm run feat -- ai-contract <名字> "<需求>" [--mock] [--yes]
                                        # AI 生成契约 → 初审 → 人确认 → 冻结
-npm run feat -- test <名字>             # 只跑该单元判据（AI 迭代用）
-npm run feat -- ticket <名字>           # 打印 AI 任务单
+npm run feat -- test <名字> [--group <组名>]  # 只跑该单元判据（AI 迭代用）
+npm run feat -- ticket <名字> [--group <组名>]# 打印 AI 任务单
 npm run feat -- check                  # 总闸（同 npm run check）
 ```
+
+### 添加服务组（两种方式，效果一致）
+
+```bash
+# 方式 A：CLI
+npm run feat -- new-group order-service
+
+# 方式 B：管理台「服务组」下拉旁的 ＋ 按钮
+```
+
+生成骨架：`features/`（空）+ `ports/`（复制 errors/logger，全组错误协议一致）+
+`config.ts`（fail fast）+ `index.ts`（组合根空骨架）+ `manifest.json` + `group.test.ts`。
+之后在管理台左侧切换组，`feat new <名字> --group order-service` 建第一个单元。
+注意：一键接线的锚点目前面向 auth-service——**新组第一个单元请人工接线**
+（参照 auth-service/index.ts 模式），后续可扩展锚点。
 
 ---
 
