@@ -532,10 +532,10 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
       }
       case "wiring": {
         // ⑥ 接线确认：机器判据先行——预演失败（tsc 有错）禁止确认落盘
-        const wiring = pipeline.artifact?.wiring as { preflight?: { ok: boolean; summary: string } } | undefined;
-        if (wiring?.preflight && !wiring.preflight.ok) {
+        const wiringArt = pipeline.artifact as { wiring?: { preflight?: { ok: boolean; summary: string } } } | undefined;
+        if (wiringArt?.wiring?.preflight && !wiringArt.wiring.preflight.ok) {
           pipeline.log.push("✗ 打包预演失败——禁止确认落盘（机器判据拦截），请人工检查或打回");
-          return c.json({ ...pipeline, error: `打包预演失败（tsc 有错）：${wiring.preflight.summary}` }, 400);
+          return c.json({ ...pipeline, error: `打包预演失败（tsc 有错）：${wiringArt.wiring.preflight.summary}` }, 400);
         }
         const r = applyWiring(unit, "流水线确认", group);
         pipeline.log.push(`  · ${r.message}`);
