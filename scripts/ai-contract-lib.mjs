@@ -1299,3 +1299,90 @@ export interface ${P} {
   writeFileSync(path, content);
   return { name, path, interfaceName: P };
 }
+
+// ---------------------------------------------------------------------------
+// 端口作者（Agent-D）：AI 生成端口接口 → 机器初审 → 人确认冻结
+// ---------------------------------------------------------------------------
+
+/**
+ * 端口机器初审（纪律检查）：
+ *  - 纯接口（有 export interface，无 class）；
+ *  - 零基础设施 import（端口接口不得依赖任何外部包）；
+ *  - 有一句话用途；方法均为 Promise 返回。
+ */
+export function machineCheckPort(content) {
+  const checks = [
+    { label: "结构：包含 export interface", ok: /export\s+interface\s+\w+/.test(content) },
+    { label: "纪律：无实现代码（无 class / 无方法体）", ok: !/class\s+\w+/.test(content) && !/=>\s*\{/.test(content) && !/\)\s*\{[\s\S]*\}/.test(content) },
+    { label: "纪律：零 import（端口接口不依赖任何外部包）", ok: !/^\s*import\s/m.test(content) },
+    { label: "纪律：无基础设施字样（pg/redis/express/knex…）", ok: !/\b(pg|redis|express|knex|prisma|mongoose|mysql)\b/i.test(content) },
+    { label: "结构：有一句话用途", ok: /一句话[:：]/.test(content) },
+    { label: "惯例：方法返回 Promise", ok: !/:\s*(string|number|boolean|void|Date)(\s|;|\n|$)/.test(content.replace(/\/\*[\s\S]*?\*\//g, "")) },
+  ];
+  return { checks, ok: checks.every((c) => c.ok) };
+}
+
+/**
+ * 生成端口草稿（Agent-D）并写入 ports/<name>.ts。
+ * - mock 模式：内置"带典型缺陷的草稿"（泄漏实现/同步返回/缺语义注释），供评审抓；
+ * - 真实模式：调 API（05-port-drafter.md 纪律）。
+ * 守卫：已冻结的端口不允许被 AI 重写（冻结区纪律）。
+ */
+export async function generatePort(name, description, mock = true, group = GROUP) {
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error("端口名只允许小写字母、数字、连字符（kebab-case）");
+  const P = pascal(name);
+  const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
+
+  if (existsSync(path) && readFileSync(path, "utf8").includes("冻结记录")) {
+    throw new Error(`端口已冻结（${group}/ports/${name}.ts）——不允许被 AI 生成覆盖，请走契约演进流程`);
+  }
+
+  let content;
+  if (mock) {
+    // 典型缺陷草稿：① import redis（泄漏实现）② 同步返回（外部世界是异步的）
+    // ③ 无幂等/失败约定注释 ④ 无"时钟由调用方注入"设计
+    content = `/**
+ * [角色] 端口：${P} —— ${description ?? "（待补用途说明）"}（草稿 v0.1，模拟 AI 生成，未冻结）
+ */
+
+// ⚠️ 缺陷：端口接口禁止依赖具体存储（实现细节泄漏）
+import { Redis } from "redis";
+
+export interface ${P} {
+  // ⚠️ 缺陷：同步返回——外部世界是异步的，应为 Promise<T>
+  verify(token: string): boolean;
+  // ⚠️ 缺陷：无幂等/失败约定注释；过期判定交给谁？应由调用方注入时钟
+}
+`;
+  } else {
+    const promptText = readFileSync(join(ROOT, "docs/agent-prompts/05-port-drafter.md"), "utf8")
+      .replace("{PORT_NAME}", name)
+      .replace("{PORT_REQUIREMENT}", description ?? "");
+    const raw = await callLLM({
+      system: promptText,
+      user: `只输出一个 ts 代码块：ports/${name}.ts 的完整内容。`,
+    });
+    const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
+    if (!m) throw new Error(`模型输出无法解析（需要单个 ts 代码块）。原始输出片段：\n${raw.slice(0, 300)}`);
+    content = m[1];
+  }
+
+  writeFileSync(path, content);
+  const { checks, ok } = machineCheckPort(content);
+  return { name, interfaceName: P, content, checks, machineOk: ok };
+}
+
+/** 冻结端口：人确认后，文件头写冻结记录 + git 提交。 */
+export function freezePort(name, reviewer = "管理台操作员", group = GROUP) {
+  const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
+  if (!existsSync(path)) throw new Error(`端口不存在: ${group}/ports/${name}.ts`);
+  const record = `/**
+ * 冻结记录（端口）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后冻结。
+ * 冻结后任何修改必须走契约演进流程。
+ */
+`;
+  writeFileSync(path, record + readFileSync(path, "utf8"));
+  spawnSync("git", ["add", "-A"], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `port: ${name} 端口冻结（人确认）`], { cwd: ROOT });
+  return { committed: commit.status === 0, message: commit.status === 0 ? `已冻结并提交: ports/${name}.ts` : "冻结记录已写入，git 提交失败" };
+}

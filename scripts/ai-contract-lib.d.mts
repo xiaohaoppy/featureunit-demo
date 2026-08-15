@@ -37,6 +37,27 @@ export function createPort(
   description: string,
   group?: string,
 ): { name: string; path: string; interfaceName: string };
+export function machineCheckPort(content: string): {
+  checks: Array<{ label: string; ok: boolean }>;
+  ok: boolean;
+};
+export function generatePort(
+  name: string,
+  description: string,
+  mock?: boolean,
+  group?: string,
+): Promise<{
+  name: string;
+  interfaceName: string;
+  content: string;
+  checks: Array<{ label: string; ok: boolean }>;
+  machineOk: boolean;
+}>;
+export function freezePort(
+  name: string,
+  reviewer?: string,
+  group?: string,
+): { committed: boolean; message: string };
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

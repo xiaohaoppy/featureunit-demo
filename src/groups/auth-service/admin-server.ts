@@ -35,6 +35,8 @@ import {
   createGroup,
   portList,
   createPort,
+  generatePort,
+  freezePort,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -314,6 +316,28 @@ app.post("/admin/api/ports", async (c) => {
   try {
     const r = createPort(name ?? "", description ?? "", groupOf(c));
     return c.json({ ok: true, ...r });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** AI 生成端口草稿（Agent-D）：body = { name, description, mock }。 */
+app.post("/admin/api/ports/generate", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { name, description, mock = true } = body as { name?: string; description?: string; mock?: boolean };
+  try {
+    return c.json(await generatePort(name ?? "", description ?? "", mock, groupOf(c)));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 冻结端口（人确认后）：body = { reviewer? }。 */
+app.post("/admin/api/ports/:name/freeze", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { reviewer } = body as { reviewer?: string };
+  try {
+    return c.json(freezePort(c.req.param("name"), reviewer ?? "管理台操作员", groupOf(c)));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }

@@ -937,6 +937,61 @@ $("btn-port-create").addEventListener("click", async () => {
   }
 });
 
+// AI 生成端口草稿（Agent-D）→ 机器初审 → 人确认冻结
+let portAiState = null;
+
+$("btn-port-ai").addEventListener("click", async () => {
+  const name = $("port-new-name").value.trim();
+  const description = $("port-new-desc").value.trim();
+  if (!name || !/^[a-z0-9-]+$/.test(name)) {
+    $("port-msg").innerHTML = `<div class="msg err">请先填写端口名（kebab-case）</div>`;
+    return;
+  }
+  const btn = $("btn-port-ai");
+  btn.disabled = true;
+  btn.textContent = "生成中…";
+  try {
+    const r = await api("/admin/api/ports/generate", {
+      method: "POST",
+      body: JSON.stringify({ name, description, mock: $("port-ai-mock").checked }),
+    });
+    portAiState = r;
+    $("port-ai-card").style.display = "block";
+    $("port-ai-checks").innerHTML = r.checks
+      .map((c) => `<div class="check-row"><span class="mark">${c.ok ? "✅" : "⚠️"}</span><span>${escapeHtml(c.label)}</span></div>`)
+      .join("");
+    $("port-ai-content").textContent = r.content;
+    $("port-ai-hint").textContent = r.machineOk
+      ? "机器初审全部通过——请人审阅后确认冻结。"
+      : "机器初审发现纪律问题——请审阅并修正后确认（或打回人工编辑）。";
+  } catch (err) {
+    $("port-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🤖 AI 生成（Agent-D）";
+  }
+});
+
+$("btn-port-freeze").addEventListener("click", async () => {
+  if (!portAiState) return;
+  const btn = $("btn-port-freeze");
+  btn.disabled = true;
+  try {
+    const r = await api(`/admin/api/ports/${portAiState.name}/freeze`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    $("port-ai-hint").textContent = `✅ ${r.message}`;
+    $("port-ai-card").style.display = "none";
+    portAiState = null;
+    await loadPorts();
+  } catch (err) {
+    $("port-ai-hint").textContent = `冻结失败：${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------

@@ -314,9 +314,20 @@
         <div class="row" style="margin-top:8px">
           <input type="text" id="port-new-name" placeholder="端口名（kebab-case，如 token-verifier）" style="flex:1" />
           <input type="text" id="port-new-desc" placeholder="一句话用途（写入文件头）" style="flex:1.5" />
-          <button class="btn" id="btn-port-create">＋ 新建端口</button>
+          <button class="btn" id="btn-port-create">＋ 手动新建</button>
+          <button class="btn" id="btn-port-ai">🤖 AI 生成（Agent-D）</button>
+          <label class="hint" style="margin:0"><input type="checkbox" id="port-ai-mock" checked /> mock</label>
         </div>
         <div id="port-msg"></div>
+      </div>
+      <div class="card" id="port-ai-card" style="display:none">
+        <h2>端口草稿 + 机器初审（纪律检查）</h2>
+        <div class="check-list" id="port-ai-checks"></div>
+        <pre class="code" id="port-ai-content" style="max-height:340px"></pre>
+        <div class="row" style="margin-top:10px">
+          <button class="btn" id="btn-port-freeze">确认冻结（人审阅后）</button>
+          <span class="hint" id="port-ai-hint">已审阅草稿并确认符合纪律后点击冻结；不满意可人工编辑文件或重新生成</span>
+        </div>
       </div>
       <div class="card">
         <h2>端口清单（📌 依赖它的单元 ｜ 🔧 适配器实现）</h2>
