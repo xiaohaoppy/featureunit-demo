@@ -72,7 +72,7 @@ export function resolveConfigValue(key, fallback = "") {
 export const CONFIG_KEYS = [
   { key: "AI_API_KEY", label: "AI 密钥（OpenAI 兼容 API）", secret: true, fallback: "" },
   { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
-  { key: "AI_MODEL", label: "AI 模型名", secret: false, fallback: "deepseek-chat" },
+  { key: "AI_MODEL", label: "AI 模型名（V4 系列；deepseek-chat 已停用）", secret: false, fallback: "deepseek-v4-flash" },
   { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
   { key: "USER_STORE", label: "存储模式", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
   { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/auth-service.db" },
@@ -758,7 +758,7 @@ async function callLLM(prompt) {
     throw new Error("未配置 API Key：请在管理台「配置」面板填写 AI_API_KEY，或设置环境变量。演示模式请用 mock: true");
   }
   const base = resolveConfigValue("AI_BASE_URL", "https://api.deepseek.com");
-  const model = resolveConfigValue("AI_MODEL", "deepseek-chat");
+  const model = resolveConfigValue("AI_MODEL", "deepseek-v4-flash");
 
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",

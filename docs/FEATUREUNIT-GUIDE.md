@@ -317,7 +317,8 @@ npm run feat -- ai-contract delete-account "登录用户可以删除自己的账
 
 配置（管理台「配置」tab 或环境变量，优先级：本地配置 → 环境变量 → 默认值）：
 `AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、
-`AI_MODEL`（默认 deepseek-chat）。密钥保存于 `.featureunit.local.json`（不进 git）。
+`AI_MODEL`（默认 deepseek-v4-flash；V4 系列——`deepseek-chat`/`deepseek-reasoner`
+已于 2026-07-24 停用，迁移只需改这一行）。密钥保存于 `.featureunit.local.json`（不进 git）。
 
 **冻结权永远在人**：EOF（没有明确输入）默认按"打回"处理——没有确认 = 不通过。
 

@@ -133,7 +133,7 @@ AI 跑到判据全绿 + `tsc` 通过 = 完成。**判据红不许改判据**—�
 # 方式 B：环境变量
 export AI_API_KEY=sk-你的密钥
 export AI_BASE_URL=https://api.deepseek.com   # 可选，默认就是这个
-export AI_MODEL=deepseek-chat                 # 可选
+export AI_MODEL=deepseek-v4-flash              # 可选（V4 系列；deepseek-chat 已停用）
 ```
 
 配好后 `feat ai-contract` 和管理台的"真实模式"直接调用模型；

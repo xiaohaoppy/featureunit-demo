@@ -163,7 +163,7 @@ npm run feat -- ai-contract delete-account "登录用户可以删除自己的账
 5. 之后照旧：写判据 → 发 ticket → AI 只写 impl.ts。
 
 配置（也可在管理台「配置」tab 填写，保存到 `.featureunit.local.json`，不进 git）：
-`AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、`AI_MODEL`（默认 deepseek-chat）。
+`AI_API_KEY`（必填）、`AI_BASE_URL`（默认 https://api.deepseek.com）、`AI_MODEL`（默认 deepseek-v4-flash——V4 系列，`deepseek-chat` 已停用）。
 优先级：**本地配置 → 环境变量 → 默认值**。
 
 ## 六、人为什么能负责（机制清单）
