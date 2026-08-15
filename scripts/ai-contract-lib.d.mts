@@ -88,6 +88,18 @@ export function generateWiringDraft(
   raw?: string;
   machineOk?: boolean;
 }>;
+export function analyzeRequirement(
+  requirement: string,
+  group?: string,
+): {
+  group: string;
+  newGroup: string | null;
+  unitName: string;
+  portName: string | null;
+  portDescription: string;
+  unitDescription: string;
+  reasons: string[];
+};
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

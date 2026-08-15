@@ -39,6 +39,7 @@ import {
   freezePort,
   savePortFile,
   generateWiringDraft,
+  analyzeRequirement,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -384,8 +385,169 @@ app.get("/admin/api/units/:name/errorcodes", (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// 判据运行
+// 流水线（超级向导）：一句话需求 → 自动规划 → 逐步生成 → 人逐步确认
 // ---------------------------------------------------------------------------
+
+/** 流水线状态（内存态：单条流水线；每一步产出后暂停等人确认）。 */
+interface PipelineState {
+  requirement: string;
+  mock: boolean;
+  plan: ReturnType<typeof analyzeRequirement>;
+  step: "plan" | "port" | "contract" | "judge" | "implement" | "wiring" | "done";
+  unit: string;
+  group: string;
+  /** 当前步产物（供界面展示）。 */
+  artifact: unknown;
+  log: string[];
+}
+
+let pipeline: PipelineState | null = null;
+
+/** 流水线步骤说明（前端进度条用）。 */
+const PIPELINE_STEPS: Array<{ id: string; label: string }> = [
+  { id: "plan", label: "① 需求规划" },
+  { id: "port", label: "② 端口生成" },
+  { id: "contract", label: "③ 契约生成" },
+  { id: "judge", label: "④ 判据生成" },
+  { id: "implement", label: "⑤ 实现" },
+  { id: "wiring", label: "⑥ 打包接线" },
+  { id: "done", label: "⑦ 完成" },
+];
+
+/** 开始流水线：body = { requirement, mock }。 */
+app.post("/admin/api/pipeline/start", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { requirement, mock = true } = body as { requirement?: string; mock?: boolean };
+  if (!requirement || requirement.trim().length < 4) {
+    return c.json({ error: "请用一句话描述功能需求（至少 4 字）" }, 400);
+  }
+  try {
+    const plan = analyzeRequirement(requirement, groupOf(c));
+    pipeline = {
+      requirement,
+      mock,
+      plan,
+      step: "plan",
+      unit: plan.unitName,
+      group: plan.group,
+      artifact: { plan, steps: PIPELINE_STEPS },
+      log: [`需求分析：${requirement}`, ...plan.reasons.map((r) => `  · ${r}`)],
+    };
+    return c.json(pipeline);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 当前流水线状态。 */
+app.get("/admin/api/pipeline", (c) => {
+  return c.json(pipeline ?? { error: "尚未开始流水线", step: null });
+});
+
+/**
+ * 确认/打回当前步，并推进到下一步。
+ * body = { approved: boolean }
+ */
+app.post("/admin/api/pipeline/confirm", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { approved } = body as { approved?: boolean };
+  if (!pipeline) return c.json({ error: "尚未开始流水线" }, 400);
+  if (pipeline.step === "done") return c.json(pipeline);
+
+  if (approved === false) {
+    pipeline.log.push(`✗ 第 ${PIPELINE_STEPS.findIndex((s) => s.id === pipeline!.step) + 1} 步被打回——流水线终止，请人工处理已生成产物`);
+    return c.json({ ...pipeline, rejected: true });
+  }
+  pipeline.log.push(`✓ 确认：${PIPELINE_STEPS.find((s) => s.id === pipeline!.step)?.label}`);
+
+  const { plan, mock, unit, group } = pipeline;
+  try {
+    switch (pipeline.step) {
+      case "plan": {
+        // ① 规划确认：建组（如需要）+ 建单元 + 生成端口草稿（已存在则复用，流水线可重跑）
+        if (plan.newGroup) {
+          try {
+            createGroup(plan.newGroup);
+            pipeline.log.push(`  · 已创建服务组 ${plan.group}`);
+          } catch (err) {
+            pipeline.log.push(`  · 服务组已存在，复用 ${plan.group}`);
+          }
+        }
+        try {
+          createUnit(unit, group);
+          pipeline.log.push(`  · 已创建单元 ${group}/features/${unit}`);
+        } catch (err) {
+          pipeline.log.push(`  · 单元已存在，复用 ${group}/features/${unit}`);
+        }
+        if (plan.portName) {
+          const port = await generatePort(plan.portName, plan.portDescription, mock, group);
+          pipeline.artifact = { port, portName: plan.portName };
+          pipeline.log.push(`  · 已生成端口草稿 ${plan.portName}（待初审确认）`);
+        } else {
+          pipeline.artifact = { port: null, note: "复用现有端口" };
+        }
+        pipeline.step = "port";
+        break;
+      }
+      case "port": {
+        // ② 端口确认：冻结端口 → 生成契约草稿
+        if (plan.portName) {
+          const r = freezePort(plan.portName, "流水线确认", group);
+          pipeline.log.push(`  · ${r.message}`);
+        }
+        const draft = await generateDraft(unit, pipeline.requirement, mock, group);
+        const mc = machineCheck(unit, draft.ts, draft.md, group);
+        pipeline.artifact = { draft, machine: mc };
+        pipeline.log.push(`  · 已生成契约草稿（机器初审 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
+        pipeline.step = "contract";
+        break;
+      }
+      case "contract": {
+        // ③ 契约确认：冻结 → 生成判据骨架
+        const r = freeze(unit, { generation: mock ? "模拟 AI" : "真实 AI", reviewer: "流水线确认", approved: "10/10" }, group);
+        pipeline.log.push(`  · ${r.message}`);
+        const judge = await generateJudgeTest(unit, mock, group);
+        pipeline.artifact = { judge };
+        pipeline.log.push(`  · 已生成判据骨架（${judge.invariants.length} 条不变量）——占位判据需人工补全断言后才能冻结`);
+        pipeline.step = "judge";
+        break;
+      }
+      case "judge": {
+        // ④ 判据确认：冻结判据（占位会被拦截）→ 交给实现器
+        const r = freezeJudge(unit, "流水线确认", group);
+        pipeline.log.push(`  · ${r.message}`);
+        const impl = await implementUnit(unit, { mock, maxRounds: mock ? 2 : 5 }, group);
+        pipeline.artifact = { impl };
+        pipeline.log.push(`  · 实现器结果：${impl.message}`);
+        pipeline.step = "implement";
+        break;
+      }
+      case "implement": {
+        // ⑤ 实现确认（含"停手求援"的人工接受）→ 打包接线
+        const wiring = await generateWiringDraft(unit, { mock }, group);
+        pipeline.artifact = { wiring };
+        pipeline.log.push(`  · 打包草稿：${wiring.source}；${mock ? wiring.preflight?.summary : "结构初审"}`);
+        pipeline.step = "wiring";
+        break;
+      }
+      case "wiring": {
+        // ⑥ 接线确认：落盘 + 总闸
+        const r = applyWiring(unit, "流水线确认", group);
+        pipeline.log.push(`  · ${r.message}`);
+        pipeline.artifact = { apply: r };
+        pipeline.step = "done";
+        pipeline.log.push("🎉 流水线完成——请运行总闸（npm run check）并冒烟验证");
+        break;
+      }
+      default:
+        break;
+    }
+  } catch (err) {
+    pipeline.log.push(`✗ 执行出错：${err instanceof Error ? err.message : String(err)}`);
+    return c.json({ ...pipeline, error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+  return c.json(pipeline);
+});
 
 app.post("/admin/api/units/:name/test", async (c) => {
   const name = c.req.param("name");

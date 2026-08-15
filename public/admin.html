@@ -151,6 +151,7 @@
       <button data-tab="play">试玩</button>
       <button data-tab="wizard">向导</button>
       <button data-tab="ports">端口</button>
+      <button data-tab="pipeline">流水线</button>
       <button data-tab="config">配置</button>
     </nav>
 
@@ -350,6 +351,29 @@
             <button class="btn ghost" id="btn-port-edit-cancel">取消</button>
           </div>
           <div class="msg warn" style="margin-top:8px">端口是冻结区文件——人编辑允许，但每次保存强制 git 留痕，请填写修改说明。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 流水线：一句话需求 → 自动规划 → 逐步生成 → 人逐步确认 -->
+    <section class="panel" id="panel-pipeline">
+      <div class="card">
+        <h2>流水线（超级向导）：只说一句话，系统逐步生成，你逐步确认</h2>
+        <div class="row" style="margin-top:8px">
+          <input type="text" id="pipe-req" placeholder="如：支持用户收藏商品 / 管理收货地址 / 记录库存变动" style="flex:2" />
+          <label class="hint" style="margin:0"><input type="checkbox" id="pipe-mock" checked /> mock</label>
+          <button class="btn" id="btn-pipe-start">开始流水线</button>
+        </div>
+        <div id="pipe-msg"></div>
+      </div>
+      <div class="card" id="pipe-body" style="display:none">
+        <h2>流水线进度</h2>
+        <div id="pipe-steps" class="hint"></div>
+        <div id="pipe-log" class="output-box" style="margin-top:10px; max-height:180px"></div>
+        <div id="pipe-artifact" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:12px" id="pipe-actions">
+          <button class="btn" id="btn-pipe-confirm">✓ 确认本步</button>
+          <button class="btn danger" id="btn-pipe-reject">✗ 打回</button>
         </div>
       </div>
     </section>

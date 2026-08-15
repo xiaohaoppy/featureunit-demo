@@ -1094,6 +1094,114 @@ $("btn-pack").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// 流水线（超级向导）：一句话需求 → 逐步生成 → 人逐步确认
+// ---------------------------------------------------------------------------
+
+let pipe = null; // 当前流水线状态
+
+function renderPipeline() {
+  if (!pipe) return;
+  $("pipe-body").style.display = "block";
+
+  // 进度条
+  const steps = pipe.artifact?.steps ?? [];
+  const currentIdx = steps.findIndex((s) => s.id === pipe.step);
+  $("pipe-steps").innerHTML = steps
+    .map((s, i) => {
+      const state = i < currentIdx ? "✅" : i === currentIdx ? "▶️" : "⬜";
+      return `<span style="margin-right:10px">${state} ${escapeHtml(s.label)}</span>`;
+    })
+    .join("");
+
+  // 日志
+  $("pipe-log").textContent = pipe.log.join("\n");
+
+  // 当前步产物
+  const art = pipe.artifact ?? {};
+  let html = "";
+  if (pipe.step === "plan" && art.plan) {
+    html = `<div class="msg warn">规划方案（请确认或打回）：</div>
+      <div class="check-list">
+        ${art.plan.reasons.map((r) => `<div class="check-row"><span class="mark">📋</span><span>${escapeHtml(r)}</span></div>`).join("")}
+      </div>`;
+  }
+  if (pipe.step === "port" && art.port) {
+    html = `<div class="msg warn">端口草稿（Agent-D）——机器初审：</div>
+      <div class="check-list">${art.port.checks.map((c) => `<div class="check-row"><span class="mark">${c.ok ? "✅" : "⚠️"}</span><span>${escapeHtml(c.label)}</span></div>`).join("")}</div>
+      <pre class="code" style="max-height:200px">${escapeHtml(art.port.content)}</pre>`;
+  }
+  if (pipe.step === "contract" && art.draft) {
+    html = `<div class="msg warn">契约草稿（Agent-A）——机器初审：</div>
+      <div class="check-list">${art.machine.checks.map((c) => `<div class="check-row"><span class="mark">${c.ok ? "✅" : "⚠️"}</span><span>${escapeHtml(c.label)}</span></div>`).join("")}</div>
+      <pre class="code" style="max-height:200px">${escapeHtml(art.draft.ts.slice(0, 1200))}</pre>`;
+  }
+  if (pipe.step === "judge" && art.judge) {
+    html = `<div class="msg warn">判据骨架（Agent-B，${art.judge.invariants.length} 条不变量）——确认时会校验：占位判据不允许冻结，请先在「单元详情」补全断言</div>
+      <pre class="code" style="max-height:200px">${escapeHtml(art.judge.test.slice(0, 1000))}</pre>`;
+  }
+  if (pipe.step === "implement" && art.impl) {
+    html = `<div class="msg warn">实现器结果（Agent-C，${art.impl.rounds.length} 轮）：</div>
+      <div class="check-list">${art.impl.rounds.map((r) => `<div class="check-row"><span class="mark">${r.ok ? "✅" : "❌"}</span><span>第 ${r.round} 轮：${escapeHtml(r.summary)}</span></div>`).join("")}</div>
+      <div class="msg ${art.impl.ok ? "ok" : "warn"}">${escapeHtml(art.impl.message)}</div>`;
+  }
+  if (pipe.step === "wiring" && art.wiring) {
+    html = `<div class="msg warn">打包草稿（Agent-E）：${escapeHtml(art.wiring.source)}</div>`;
+    if (art.wiring.preflight) html += `<div class="msg ${art.wiring.preflight.ok ? "ok" : "err"}">${escapeHtml(art.wiring.preflight.summary)}</div>`;
+    if (art.wiring.checks) html += `<div class="check-list">${art.wiring.checks.map((c) => `<div class="check-row"><span class="mark">${c.ok ? "✅" : "⚠️"}</span><span>${escapeHtml(c.label)}</span></div>`).join("")}</div>`;
+  }
+  if (pipe.step === "done") {
+    html = `<div class="msg ok">🎉 流水线完成。请运行总闸并冒烟验证。</div>`;
+  }
+  $("pipe-artifact").innerHTML = html;
+
+  // 动作按钮：done 时隐藏
+  $("pipe-actions").style.display = pipe.step === "done" ? "none" : "";
+}
+
+$("btn-pipe-start").addEventListener("click", async () => {
+  const requirement = $("pipe-req").value.trim();
+  if (requirement.length < 4) {
+    $("pipe-msg").innerHTML = `<div class="msg err">请用一句话描述功能需求（至少 4 字）</div>`;
+    return;
+  }
+  try {
+    pipe = await api("/admin/api/pipeline/start", {
+      method: "POST",
+      body: JSON.stringify({ requirement, mock: $("pipe-mock").checked }),
+    });
+    $("pipe-msg").innerHTML = "";
+    renderPipeline();
+  } catch (err) {
+    $("pipe-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+$("btn-pipe-confirm").addEventListener("click", async () => {
+  if (!pipe || pipe.step === "done") return;
+  const btn = $("btn-pipe-confirm");
+  btn.disabled = true;
+  try {
+    pipe = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
+    renderPipeline();
+    if (pipe.error) $("pipe-msg").innerHTML = `<div class="msg err">${escapeHtml(pipe.error)}</div>`;
+  } catch (err) {
+    $("pipe-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("btn-pipe-reject").addEventListener("click", async () => {
+  if (!pipe || pipe.step === "done") return;
+  try {
+    pipe = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: false }) });
+    renderPipeline();
+  } catch (err) {
+    $("pipe-msg").innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------
 

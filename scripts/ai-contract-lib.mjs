@@ -336,7 +336,7 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
     test = m[1];
   }
 
-  writeFileSync(join(unitDir(name), "impl.test.ts"), test);
+  writeFileSync(join(unitDir(name, group), "impl.test.ts"), test);
   return { name, test, invariants: extractInvariants(contract) };
 }
 
@@ -395,7 +395,7 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
   throw new AppError(ErrorCodes.INVALID_INPUT, 400); // 第 ${round} 轮：故意不满足不变量
 };
 `;
-      writeFileSync(join(unitDir(name), "impl.ts"), impl);
+      writeFileSync(join(unitDir(name, group), "impl.ts"), impl);
     } else {
       const promptText = readFileSync(join(ROOT, "docs/agent-prompts/03-unit-implementer.md"), "utf8");
       const feedback = rounds.length
@@ -408,7 +408,7 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
       const raw = await callLLM({ system, user: `只输出一个 ts 代码块：impl.ts 的完整内容。` });
       const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
       if (!m) throw new Error(`模型输出无法解析：\n${raw.slice(0, 300)}`);
-      writeFileSync(join(unitDir(name), "impl.ts"), m[1]);
+      writeFileSync(join(unitDir(name, group), "impl.ts"), m[1]);
     }
 
     // ② 跑判据
@@ -1575,4 +1575,59 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
     { label: "manifest 片段含版本登记", ok: raw.includes(`"${name}"`) },
   ];
   return { source: "live（AI 生成片段，人粘贴后跑总闸）", name, checks, raw, machineOk: checks.every((x) => x.ok) };
+}
+
+// ---------------------------------------------------------------------------
+// 流水线（超级向导）：从一句话需求自动规划 → 逐步生成 → 人逐步确认
+// ---------------------------------------------------------------------------
+
+/**
+ * 分析一句话需求，规划方案：服务组 / 单元 / 端口（mock：关键词规则；
+ * 真实模式可让 AI 解析——本函数即"需求解析器"的最小实现）。
+ *
+ * 规则设计：新业务域（订单/库存/地址/收藏…）→ 新服务组 + 新端口 + 新单元；
+ * 已有域（认证/登录/邮箱…）→ 复用 auth-service 与现有端口。
+ */
+export function analyzeRequirement(requirement, group = GROUP) {
+  const d = requirement ?? "";
+
+  // ── 组推断 ──
+  let newGroup = null;
+  let g = group;
+  if (/订单|order|下单/i.test(d)) newGroup = "order-service";
+  else if (/库存|stock|inventory/i.test(d)) newGroup = "inventory-service";
+  else if (/地址|address|收货/i.test(d)) newGroup = "address-service";
+  else if (/收藏|favorite|wishlist|心愿/i.test(d)) newGroup = "favorite-service";
+  else if (/认证|登录|注册|邮箱|密码|账号|session|auth|会话/i.test(d)) g = "auth-service";
+  else newGroup = "app-service";
+
+  // ── 单元名（动词+对象）──
+  let unitName = "process-request";
+  if (/收藏/.test(d)) unitName = "toggle-favorite";
+  else if (/地址/.test(d)) unitName = "manage-address";
+  else if (/库存/.test(d)) unitName = "record-stock-movement";
+  else if (/订单/.test(d)) unitName = "create-order";
+  else if (/登录|认证|会话|token/i.test(d)) unitName = "verify-session";
+
+  // ── 端口（该域的外部能力切面）──
+  let portName = null;
+  let portDescription = "";
+  if (/收藏/.test(d)) { portName = "favorite-item"; portDescription = "用户收藏的商品条目存储"; }
+  else if (/地址/.test(d)) { portName = "shipping-address"; portDescription = "用户收货地址的存储"; }
+  else if (/库存/.test(d)) { portName = "inventory-snapshot"; portDescription = "库存快照的存储"; }
+  else if (/订单/.test(d)) { portName = "order"; portDescription = "订单数据存储"; }
+
+  return {
+    group: newGroup ?? g,
+    newGroup,
+    unitName,
+    portName,
+    portDescription,
+    unitDescription: requirement,
+    reasons: [
+      newGroup ? `新业务域 → 创建服务组 ${newGroup}` : `已有业务域 → 复用 ${g}`,
+      portName ? `需要数据切面 → 生成端口 ${portName}` : "复用现有端口，无需新端口",
+      `核心动作 → 单元 ${unitName}`,
+    ],
+  };
 }
