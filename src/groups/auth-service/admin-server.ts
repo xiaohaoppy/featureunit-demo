@@ -642,6 +642,7 @@ function configView() {
       label,
       secret,
       options,
+      fallback, // 供前端显示"默认值"占位
       value: secret && value ? maskSecret(value) : value,
       hasValue: value !== "",
       source: fromLocal ? "本地配置文件" : fromEnv ? "环境变量" : "默认值",
