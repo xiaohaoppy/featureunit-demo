@@ -276,7 +276,8 @@
     <section class="panel" id="panel-play">
       <div class="card">
         <h2>试玩（业务冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）</h2>
-        <div class="hint">直接调用业务应用（内存存储，与 npm run dev 行为一致）。会话 cookie 自动保存在本面板。</div>
+        <div class="hint">直接调用业务应用。会话 cookie 自动保存在本面板。</div>
+        <div class="msg warn" style="margin-top:8px" id="play-storage">存储模式：加载中…（到「配置」面板切换，保存后本面板自动生效）</div>
         <div class="row" style="margin-top:10px">
           <select id="play-op" style="flex:1"></select>
           <button class="btn" id="btn-play-send">发送</button>

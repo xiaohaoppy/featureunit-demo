@@ -582,6 +582,8 @@ $("btn-play-send").addEventListener("click", async () => {
       body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }),
     });
     $("play-output").textContent = `HTTP ${r.status}\n${r.body}`;
+    // 显示当前存储模式（配置面板切换后自动跟随）
+    $("play-storage").textContent = `存储模式：${r.storageMode ?? "memory"}（「配置」面板可切换，保存后本面板自动生效）`;
     // 登录/登出/改密/改邮箱会设置或清除 cookie——模拟浏览器行为
     if (r.setCookie) {
       const m = /sid=([^;]+)/.exec(r.setCookie);

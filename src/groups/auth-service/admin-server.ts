@@ -67,9 +67,20 @@ import { createHttpApp } from "./adapters/http";
 const ROOT = join(import.meta.dirname, "..", "..", ".."); // src/groups/auth-service → 项目根
 const PUBLIC_DIR = join(ROOT, "public");
 
-// 业务应用实例（管理台"试玩"面板直接调用，无需另起 dev 服务；
-// 每次请求共享同一内存存储——与 npm run dev 行为一致）
-const bizApp = createHttpApp(createAuthApp(buildDeps(loadConfig())));
+// 业务应用实例（"试玩"面板直接调用，无需另起 dev 服务）。
+// 惰性 + 配置版本检测：管理台「配置」面板改了 USER_STORE 等后，
+// 下一次试玩请求自动按新配置重建实例（不用重启管理台）。
+let bizCache: { version: string; app: Hono } | null = null;
+
+function bizAppFor(): Hono {
+  const cfg = loadConfig(); // 每次读配置（含本地文件），校验失败会 fail fast
+  const version = JSON.stringify(cfg);
+  if (!bizCache || bizCache.version !== version) {
+    bizCache = { version, app: createHttpApp(createAuthApp(buildDeps(cfg))) };
+    console.log(`[admin] 业务实例已重建（配置版本变更）: USER_STORE=${cfg.USER_STORE}`);
+  }
+  return bizCache.app;
+}
 
 const app = new Hono();
 
@@ -452,7 +463,7 @@ app.post("/admin/api/play", async (c) => {
     return c.json({ error: "path 必须以 /api/ 开头" }, 400);
   }
   try {
-    const res = await bizApp.request(path, {
+    const res = await bizAppFor().request(path, {
       method,
       headers: {
         "content-type": "application/json",
@@ -464,6 +475,7 @@ app.post("/admin/api/play", async (c) => {
       status: res.status,
       body: await res.text(),
       setCookie: res.headers.get("set-cookie") ?? null,
+      storageMode: loadConfig().USER_STORE, // 附带回当前存储模式，前端展示
     });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
