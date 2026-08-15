@@ -24,7 +24,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { createUnit } from "./ai-contract-lib.mjs";
+import { createUnit, createGroup } from "./ai-contract-lib.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const GROUPS_DIR = join(ROOT, "src/groups");
@@ -40,6 +40,7 @@ function usage(message) {
   if (message) console.error(`\n✗ ${message}\n`);
   console.error(`用法:
   feat new <功能名> [--group <组名>]    # 生成新功能单元（4 文件模板）
+  feat new-group <组名>                 # 创建新服务组骨架（多组支持）
   feat ai-contract <功能名> "<需求>" [--mock] [--yes]
                                         # AI 生成契约草稿 → 机器初审 → 人确认 → 冻结
   feat test <功能名> [--group <组名>]   # 只跑该单元的判据
@@ -74,11 +75,22 @@ function requireDirExists(dir) {
 // ---------------------------------------------------------------------------
 
 function cmdNew(name, group) {
-  if (group !== "auth-service") usage("当前仅支持默认组 auth-service");
   try {
-    const { dir } = createUnit(name);
+    const { dir } = createUnit(name, group);
     console.log(`✓ 已生成功能单元 ${group}/features/${name}/`);
     console.log(`  下一步：填 contract.ts（或 feat ai-contract）→ 评审冻结 → 写判据 → 交给 AI`);
+  } catch (err) {
+    usage(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** feat new-group <名字>：创建新服务组骨架。 */
+function cmdNewGroup(name) {
+  try {
+    const { dir } = createGroup(name);
+    console.log(`✓ 已创建服务组 ${name}/`);
+    console.log(`  结构: features/ ports/(errors,logger) config.ts index.ts manifest.json group.test.ts`);
+    console.log(`  下一步: feat new <功能名> --group ${name} 创建第一个功能单元`);
   } catch (err) {
     usage(err instanceof Error ? err.message : String(err));
   }
@@ -132,6 +144,11 @@ switch (cmd) {
   case "new": {
     if (!arg1) usage("feat new 需要功能名");
     cmdNew(arg1, parseGroup());
+    break;
+  }
+  case "new-group": {
+    if (!arg1) usage("feat new-group 需要组名，例如: feat new-group order-service");
+    cmdNewGroup(arg1);
     break;
   }
   case "ai-contract": {

@@ -126,7 +126,10 @@
   <!-- 左侧：服务组 + 功能单元列表 -->
   <aside>
     <h3>服务组</h3>
-    <select id="group-select"></select>
+    <div class="row" style="margin-bottom:10px">
+      <select id="group-select" style="flex:1"></select>
+      <button id="btn-new-group" class="btn ghost" style="padding:6px 10px" title="新建服务组">＋</button>
+    </div>
     <h3>功能单元</h3>
     <ul id="unit-list"></ul>
     <button class="side-btn" id="btn-new-unit">＋ 新功能单元（feat new）</button>

@@ -64,8 +64,20 @@ document.querySelectorAll(".tabs button").forEach((btn) => {
 });
 
 // ---------------------------------------------------------------------------
-// 服务组切换
+// 服务组切换 / 新建
 // ---------------------------------------------------------------------------
+
+$("btn-new-group").addEventListener("click", async () => {
+  const name = prompt("新服务组名（kebab-case，如 order-service）：", "order-service");
+  if (!name || !/^[a-z0-9-]+$/.test(name)) return;
+  try {
+    await api("/admin/api/groups", { method: "POST", body: JSON.stringify({ name }) });
+    alert(`✓ 已创建服务组 ${name}（组骨架：ports/组合根/config/manifest/组判据）`);
+    await loadGroups();
+  } catch (err) {
+    alert(`创建失败：${err.message}`);
+  }
+});
 
 async function loadGroups() {
   try {

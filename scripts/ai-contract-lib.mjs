@@ -19,7 +19,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, mkdtempSync, rmSync, copyFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -1031,4 +1031,165 @@ export function checkErrorCodes(name, group = GROUP) {
     problems,
     ok: problems.length === 0,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 新建服务组（P2 多组支持：src/groups/ 下每个含 features/ 的目录即一个组）
+// ---------------------------------------------------------------------------
+
+/** 新组组合根骨架（空 API；加第一个功能单元时参照 auth-service 接线）。 */
+const NEW_GROUP_INDEX = (name) => `/**
+ * ============================================================================
+ * [角色] 组合根：${name} —— 骨架（人维护，AI 禁止触碰）
+ * ----------------------------------------------------------------------------
+ * 新组从空 API 开始。接入第一个功能单元时：
+ *   1. 参照 auth-service/index.ts 的接线模式（import → AuthApi → createApp → toXDeps）；
+ *   2. 管理台「一键接线」的锚点目前面向 auth-service——新组第一个单元请人工接线，
+ *      之后可扩展锚点支持多组；
+ *   3. 接线完跑总闸（npm run check）确认。
+ * ============================================================================
+ */
+
+import { z } from "zod";
+import { AppError, ErrorCodes } from "./ports/errors";
+import { consoleLogger, type Logger } from "./ports/logger";
+import type { AppConfig } from "./config";
+
+/** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
+export interface GroupDeps {
+  logger: Logger;
+  now: () => Date;
+}
+
+/** 组装依赖——"换基础设施"的唯一位置。 */
+export function buildDeps(config: AppConfig, overrides: Partial<GroupDeps> = {}): GroupDeps {
+  return { logger: consoleLogger, now: () => new Date(), ...overrides };
+}
+
+/** 边界校验：zod parse 全部发生在组合根这一层（单元内部假定输入已合法）。 */
+function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown): T {
+  const parsed = schema.safeParse(data);
+  if (!parsed.success) throw new AppError(ErrorCodes.INVALID_INPUT, 400);
+  return parsed.data;
+}
+
+/** 对外 API（空骨架——每加一个功能单元，这里加一个方法）。 */
+export interface GroupApi {
+  /** 健康检查：验证组合根与配置可用。 */
+  health(): { ok: boolean };
+}
+
+export function createApp(deps: GroupDeps): GroupApi {
+  return {
+    health: () => ({ ok: true }),
+  };
+}
+`;
+
+/** 新组配置骨架（fail fast；与管理台本地配置兼容）。 */
+const NEW_GROUP_CONFIG = (name) => `/**
+ * [角色] 配置：${name} —— 唯一允许读配置的文件（fail fast）
+ * 优先级：本地配置文件（.featureunit.local.json）→ 环境变量 → 默认值。
+ */
+
+import { z } from "zod";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const EnvSchema = z.object({
+  /** 业务服务端口。 */
+  PORT: z.coerce.number().int().positive().default(3000),
+});
+
+export type AppConfig = z.infer<typeof EnvSchema>;
+
+function localConfig(): Record<string, string> {
+  try {
+    const p = join(import.meta.dirname, "..", "..", "..", ".featureunit.local.json");
+    if (existsSync(p)) {
+      const raw = JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>;
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (v !== null && v !== undefined) out[k] = String(v);
+      }
+      return out;
+    }
+  } catch {
+    /* 损坏的配置文件按空处理 */
+  }
+  return {};
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const merged: NodeJS.ProcessEnv = { ...env, ...localConfig() };
+  const parsed = EnvSchema.safeParse(merged);
+  if (!parsed.success) {
+    console.error("[config] 配置校验失败（fail fast）：", JSON.stringify(parsed.error.flatten().fieldErrors));
+    process.exit(1);
+  }
+  return parsed.data;
+}
+`;
+
+/** 新组判据占位（第一个功能单元接线后替换为真实端到端用例）。 */
+const NEW_GROUP_TEST = (name) => `/**
+ * [角色] 组判据：${name} —— 组合判据（占位）
+ * 注意：这是"假绿"占位——第一个功能单元接线后，请替换为真实的端到端用例。
+ */
+
+import { describe, expect, it } from "vitest";
+
+describe("${name} 组判据", () => {
+  it("占位：等待第一个功能单元", () => {
+    expect(true).toBe(true);
+  });
+});
+`;
+
+/**
+ * 创建服务组：src/groups/<name>/ 骨架。
+ * 从 auth-service 复制通用端口（errors/logger），生成组合根/配置/manifest/组判据。
+ * @param name kebab-case 组名（如 order-service）
+ */
+export function createGroup(name) {
+  if (!/^[a-z0-9-]+$/.test(name)) {
+    throw new Error("组名只允许小写字母、数字、连字符（kebab-case）");
+  }
+  const dir = join(GROUPS_DIR, name);
+  if (existsSync(dir)) {
+    throw new Error(`服务组已存在: ${name}`);
+  }
+
+  mkdirSync(join(dir, "features"), { recursive: true });
+  mkdirSync(join(dir, "ports"), { recursive: true });
+  mkdirSync(join(dir, "adapters"), { recursive: true });
+
+  // 通用端口从 auth-service 复制（错误协议与日志端口全组一致，保证错误码/日志语义统一）
+  copyFileSync(join(GROUPS_DIR, GROUP, "ports", "errors.ts"), join(dir, "ports", "errors.ts"));
+  copyFileSync(join(GROUPS_DIR, GROUP, "ports", "logger.ts"), join(dir, "ports", "logger.ts"));
+
+  writeFileSync(join(dir, "index.ts"), NEW_GROUP_INDEX(name));
+  writeFileSync(join(dir, "config.ts"), NEW_GROUP_CONFIG(name));
+  writeFileSync(
+    join(dir, "manifest.json"),
+    JSON.stringify(
+      {
+        name,
+        description: `服务组：${name}（新建，等待第一个功能单元）`,
+        version: "0.1.0",
+        owner: "human",
+        features: {},
+        rules: {
+          compositionRootOwner: "human",
+          aiWritablePaths: ["**/impl.ts"],
+          frozenPaths: ["**/contract.ts", "**/spec.md", "**/impl.test.ts", "ports/**", "index.ts"],
+        },
+      },
+      null,
+      2,
+    ) + "\n",
+  );
+  writeFileSync(join(dir, "group.test.ts"), NEW_GROUP_TEST(name));
+
+  return { name, dir };
 }

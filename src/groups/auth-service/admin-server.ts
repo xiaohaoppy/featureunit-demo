@@ -32,6 +32,7 @@ import {
   REVIEW_ITEMS,
   CONFIG_KEYS,
   listGroups,
+  createGroup,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -97,6 +98,18 @@ app.get("/admin/app.js", (c) => {
 
 app.get("/admin/api/groups", (c) => {
   return c.json({ groups: listGroups(), current: groupOf(c) });
+});
+
+/** 新建服务组：body = { name }。生成组骨架（端口/组合根/配置/manifest）。 */
+app.post("/admin/api/groups", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { name } = body as { name?: string };
+  try {
+    createGroup(name ?? "");
+    return c.json({ ok: true, name });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
 });
 
 app.get("/admin/api/units", (c) => {

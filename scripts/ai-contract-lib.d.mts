@@ -20,6 +20,7 @@ export function unitDir(name: string, group?: string): string;
 export function pascal(kebab: string): string;
 export function camel(kebab: string): string;
 export function listGroups(): string[];
+export function createGroup(name: string): { name: string; dir: string };
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;
