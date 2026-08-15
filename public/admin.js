@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------------
 
 const state = {
+  group: "auth-service",   // 当前服务组
   units: [],               // 单元列表（含冻结状态）
   selectedUnit: null,      // 左侧选中的单元名
   unitFiles: null,         // 选中单元的 4 文件内容
@@ -26,11 +27,12 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------------------
-// 通用：请求与消息
+// 通用：请求与消息（自动附带当前服务组）
 // ---------------------------------------------------------------------------
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, {
+  const sep = path.includes("?") ? "&" : "?";
+  const res = await fetch(`${path}${sep}group=${encodeURIComponent(state.group)}`, {
     headers: { "content-type": "application/json" },
     ...opts,
   });
@@ -60,6 +62,28 @@ document.querySelectorAll(".tabs button").forEach((btn) => {
     $("panel-" + btn.dataset.tab).classList.add("active");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 服务组切换
+// ---------------------------------------------------------------------------
+
+async function loadGroups() {
+  try {
+    const r = await fetch("/admin/api/groups").then((x) => x.json());
+    const sel = $("group-select");
+    sel.innerHTML = r.groups.map((g) => `<option value="${g}">${g}</option>`).join("");
+    sel.value = r.groups.includes(state.group) ? state.group : r.groups[0];
+    sel.addEventListener("change", () => {
+      state.group = sel.value;
+      state.selectedUnit = null;
+      loadUnits();
+      loadSourceList();
+      loadPortMatrix();
+      fillWizardSelect();
+      $("group-label").textContent = `${state.group} · 切换中…`;
+    });
+  } catch { /* 忽略 */ }
+}
 
 // ---------------------------------------------------------------------------
 // 单元列表加载与渲染（左侧栏 + 概览卡片）
@@ -724,13 +748,108 @@ async function loadWizard() {
 }
 
 // ---------------------------------------------------------------------------
+// 端口依赖矩阵（单元 → 端口）
+// ---------------------------------------------------------------------------
+
+async function loadPortMatrix() {
+  const box = $("ports-matrix");
+  try {
+    const r = await api("/admin/api/ports/map");
+    if (!r.ports.length) {
+      box.innerHTML = `<span class="hint">（无单元或无端口）</span>`;
+      return;
+    }
+    // 表格：行 = 单元，列 = 端口，● = 依赖
+    let html = `<table style="border-collapse:collapse;font-size:12.5px">
+      <tr><th style="text-align:left;padding:4px 10px">单元 \\ 端口</th>${r.ports.map((p) => `<th style="padding:4px 8px;font-family:var(--mono)">${p}</th>`).join("")}</tr>`;
+    for (const u of r.units) {
+      html += `<tr><td style="padding:4px 10px;font-family:var(--mono)">${u.name}</td>` +
+        r.ports.map((p) => `<td style="text-align:center;padding:4px 8px">${u.ports.includes(p) ? "●" : ""}</td>`).join("") + `</tr>`;
+    }
+    html += `</table>`;
+    box.innerHTML = html;
+  } catch (err) {
+    box.innerHTML = `<span class="msg err">${escapeHtml(err.message)}</span>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 提交历史 / 回滚
+// ---------------------------------------------------------------------------
+
+$("btn-history").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const box = $("history-result");
+  box.style.display = "block";
+  box.innerHTML = "加载中…";
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/history`);
+    if (!r.commits.length) {
+      box.innerHTML = `<div class="msg warn">该单元还没有提交历史（先完成契约冻结/判据/实现）。</div>`;
+      return;
+    }
+    box.innerHTML = `<div class="msg warn">该单元最近提交（点击回滚 = git revert，历史保留可追溯）：</div>` +
+      `<div class="check-list">` +
+      r.commits.map((c) => `<div class="review-item">
+          <span class="idx">${c.hash.slice(0, 7)}</span>
+          <span class="text">${escapeHtml(c.subject)}</span>
+          <button class="btn ghost" style="padding:3px 10px" data-hash="${c.hash}">回滚</button>
+        </div>`).join("") + `</div>`;
+    box.querySelectorAll("[data-hash]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm(`确认回滚提交 ${btn.dataset.hash.slice(0, 7)}？将生成一次反向提交。`)) return;
+        btn.disabled = true;
+        try {
+          const res = await api(`/admin/api/units/${state.selectedUnit}/rollback`, {
+            method: "POST",
+            body: JSON.stringify({ commit: btn.dataset.hash }),
+          });
+          box.innerHTML = `<div class="msg ${res.ok ? "ok" : "err"}">${escapeHtml(res.message)}</div>`;
+          await loadUnits();
+        } catch (err) {
+          box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+        }
+      });
+    });
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 错误码一致性检查（spec 声明 vs impl 抛出 vs errors.ts 定义）
+// ---------------------------------------------------------------------------
+
+$("btn-errorcodes").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const box = $("errorcodes-result");
+  box.style.display = "block";
+  box.innerHTML = "检查中…";
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/errorcodes`);
+    const html = r.ok
+      ? `<div class="msg ok">✅ 一致：spec 声明 ${r.declaredInSpec.length} 个错误码，impl 全部覆盖，且都已在 ports/errors.ts 定义。</div>`
+      : `<div class="msg err">⚠️ 发现 ${r.problems.length} 处不一致：</div>` +
+        `<div class="check-list">` + r.problems.map((p) => `<div class="check-row"><span class="mark">⚠️</span><span>${escapeHtml(p)}</span></div>`).join("") + `</div>`;
+    box.innerHTML = html + `<div class="hint" style="margin-top:6px">spec 声明：${r.declaredInSpec.join(", ") || "（无）"} ｜ impl 抛出：${r.thrownInImpl.join(", ") || "（无）"}</div>`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------
 
-$("btn-refresh").addEventListener("click", loadUnits);
+$("btn-refresh").addEventListener("click", () => {
+  loadUnits();
+  loadPortMatrix();
+});
 
+loadGroups();
 fillPlayOps();
 fillWizardSelect();
 loadUnits();
 loadSourceList();
+loadPortMatrix();
 loadConfigPanel();

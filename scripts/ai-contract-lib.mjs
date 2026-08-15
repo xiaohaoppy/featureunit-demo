@@ -97,9 +97,9 @@ export const REVIEW_ITEMS = [
   "成功结果是否声明'不含敏感字段'？",
 ];
 
-/** 功能单元目录。 */
-export function unitDir(name) {
-  return join(GROUPS_DIR, GROUP, "features", name);
+/** 功能单元目录（支持任意服务组）。 */
+export function unitDir(name, group = GROUP) {
+  return join(GROUPS_DIR, group, "features", name);
 }
 
 /** kebab-case → PascalCase（delete-account → DeleteAccount）。 */
@@ -215,13 +215,13 @@ describe("${name} 单元判据", () => {
  * 创建新功能单元（4 文件模板）。
  * @param name kebab-case 功能名（如 verify-2fa）
  */
-export function createUnit(name) {
+export function createUnit(name, group = GROUP) {
   if (!/^[a-z0-9-]+$/.test(name)) {
     throw new Error("功能名只允许小写字母、数字、连字符（kebab-case）");
   }
-  const dir = unitDir(name);
+  const dir = unitDir(name, group);
   if (existsSync(join(dir, "contract.ts"))) {
-    throw new Error(`功能单元已存在: ${GROUP}/features/${name}`);
+    throw new Error(`功能单元已存在: ${group}/features/${name}`);
   }
   mkdirSync(dir, { recursive: true });
   for (const [file, content] of Object.entries(unitTemplates(name))) {
@@ -241,10 +241,10 @@ const UNIT_FILES = { contract: "contract.ts", spec: "spec.md", impl: "impl.ts", 
  * 但每次保存必须 git 提交留痕（"谁在什么时候改了什么"可追溯）。
  * @returns {saved, committed, message}
  */
-export function saveUnitFile(name, file, content, note = "") {
+export function saveUnitFile(name, file, content, note = "", group = GROUP) {
   const target = UNIT_FILES[file];
   if (!target) throw new Error(`不允许编辑的文件: ${file}`);
-  const path = join(unitDir(name), target);
+  const path = join(unitDir(name, group), target);
   if (!existsSync(path)) throw new Error(`文件不存在: ${target}`);
 
   writeFileSync(path, content);
@@ -290,9 +290,9 @@ function extractInvariants(contract) {
  * - mock 模式：生成"不变量驱动的测试骨架"——每条不变量一个 it，body 显式
  *   抛 TODO（必红，杜绝 expect(true) 假绿），供人逐条补全断言。
  */
-export async function generateJudgeTest(name, mock = true) {
-  const files = readUnitFiles(name);
-  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+export async function generateJudgeTest(name, mock = true, group = GROUP) {
+  const files = readUnitFiles(name, group);
+  if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
   const contract = files.contract;
 
   let test;
@@ -320,7 +320,7 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
     const system = promptText.replace("{CONTRACT_CONTENT}", contract);
     const raw = await callLLM({
       system,
-      user: `单元名：${name}（服务组 ${GROUP}）\n只输出一个 ts 代码块：impl.test.ts 的完整内容。`,
+      user: `单元名：${name}（服务组 ${group}）\n只输出一个 ts 代码块：impl.test.ts 的完整内容。`,
     });
     const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
     if (!m) throw new Error(`模型输出无法解析（需要单个 ts 代码块）。原始输出片段：\n${raw.slice(0, 300)}`);
@@ -336,8 +336,8 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
  * 判据冻结后，实现者（Agent-C）才被允许对照它写 impl.ts。
  * 纪律：占位判据（含 TODO/expect(true)）不允许冻结——考卷没写完不许开考。
  */
-export function freezeJudge(name, reviewer = "管理台操作员") {
-  const path = join(unitDir(name), "impl.test.ts");
+export function freezeJudge(name, reviewer = "管理台操作员", group = GROUP) {
+  const path = join(unitDir(name, group), "impl.test.ts");
   if (!existsSync(path)) throw new Error(`判据文件不存在: ${name}/impl.test.ts`);
   if (isJudgePlaceholder(readFileSync(path, "utf8"))) {
     throw new Error("判据仍是占位（含 TODO / expect(true)）——请先逐条补全真实断言，再冻结");
@@ -362,9 +362,9 @@ export function freezeJudge(name, reviewer = "管理台操作员") {
  * - mock 模式：演示"迭代与失败安全"路径——每轮写一个带轮次的桩，必然红灯，
  *   演示读失败信息、重试、最终停手报告。
  */
-export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}) {
-  const files = readUnitFiles(name);
-  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}, group = GROUP) {
+  const files = readUnitFiles(name, group);
+  if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
   if (isJudgePlaceholder(files.test)) {
     throw new Error("判据尚未就绪（还是占位测试）——先写判据并确认，再让 AI 实现");
   }
@@ -426,15 +426,15 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
 /**
  * 单元状态聚合（供开发向导）：契约冻结 / 判据就绪 / 实现完成 / 接线 / 上线。
  */
-export function unitStatus(name) {
-  const files = readUnitFiles(name);
+export function unitStatus(name, group = GROUP) {
+  const files = readUnitFiles(name, group);
   if (!files.contract) return null;
   const frozen = (files.contract ?? "").includes("冻结记录");
   const judgePlaceholder = isJudgePlaceholder(files.test);
   const judgeFrozen = (files.test ?? "").includes("冻结记录");
   const implStub = isImplStub(files.impl);
-  const wiring = checkWiring(name);
-  const test = runUnitTest(name);
+  const wiring = checkWiring(name, group);
+  const test = runUnitTest(name, group);
 
   const steps = [
     { id: "contract", label: "① 契约冻结", done: frozen, hint: frozen ? "已冻结" : "契约尚未冻结（走 AI 生成 + 人评审）" },
@@ -509,12 +509,12 @@ function simpleDiff(before, after) {
  * http.ts / manifest.json）的 before/after + 行级 diff，供人审阅。
  * @returns { alreadyWired, files: [{path, before, after, diffText}] }
  */
-export function generateWiring(name) {
-  const wiring = checkWiring(name);
+export function generateWiring(name, group = GROUP) {
+  const wiring = checkWiring(name, group);
   if (wiring.allOk) return { alreadyWired: true, files: [] };
 
-  const files = readUnitFiles(name);
-  if (!files.contract) throw new Error(`功能单元不存在: ${GROUP}/features/${name}`);
+  const files = readUnitFiles(name, group);
+  if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
 
   const P = pascal(name);
   const c = camel(name);
@@ -589,14 +589,14 @@ ${callLine}
  * 应用接线：把 generateWiring 生成的 after 写盘 + git 提交。
  * 人看完 diff 点"确认"才调用——落盘权在人。
  */
-export function applyWiring(name, note = "") {
-  const { alreadyWired, files } = generateWiring(name);
+export function applyWiring(name, note = "", group = GROUP) {
+  const { alreadyWired, files } = generateWiring(name, group);
   if (alreadyWired) return { ok: true, message: "该单元已接线，无需改动", applied: 0 };
   if (!files.length) return { ok: false, message: "未能生成接线改动（锚点缺失或已接线），请人工检查", applied: 0 };
 
   for (const f of files) {
-    // f.path 相对 auth-service 目录（如 "index.ts" / "adapters/http.ts" / "manifest.json"）
-    const full = join(GROUPS_DIR, GROUP, f.path);
+    // f.path 相对服务组目录（如 "index.ts" / "adapters/http.ts" / "manifest.json"）
+    const full = join(GROUPS_DIR, group, f.path);
     writeFileSync(full, f.after);
   }
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
@@ -614,11 +614,11 @@ export function applyWiring(name, note = "") {
  * 检查新单元是否已"接线"进服务：组合根 import / AuthApi / createAuthApp /
  * HTTP 路由 / manifest 版本。机器检查、人动手——组合根仍由人编辑。
  */
-export function checkWiring(name) {
+export function checkWiring(name, group = GROUP) {
   const c = camel(name);
-  const index = readSourceFile("index.ts") ?? "";
-  const http = readSourceFile("adapters/http.ts") ?? "";
-  const manifest = readSourceFile("manifest.json") ?? "";
+  const index = readSourceFile("index.ts", group) ?? "";
+  const http = readSourceFile("adapters/http.ts", group) ?? "";
+  const manifest = readSourceFile("manifest.json", group) ?? "";
 
   const checks = [
     { label: `index.ts 已 import 实现 (features/${name}/impl)`, ok: index.includes(`features/${name}/impl`) },
@@ -635,9 +635,17 @@ export function checkWiring(name) {
 // 单元扫描与文件读取
 // ---------------------------------------------------------------------------
 
-/** 列出全部功能单元（目录含 contract.ts 即算一个单元）。 */
-export function listUnits() {
-  const dir = join(GROUPS_DIR, GROUP, "features");
+/** 列出全部服务组（src/groups/ 下有 features 目录的组）。 */
+export function listGroups() {
+  return readdirSync(GROUPS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && existsSync(join(GROUPS_DIR, d.name, "features")))
+    .map((d) => d.name)
+    .sort();
+}
+
+/** 列出某组的全部功能单元（目录含 contract.ts 即算一个单元）。 */
+export function listUnits(group = GROUP) {
+  const dir = join(GROUPS_DIR, group, "features");
   if (!existsSync(dir)) return [];
   return readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "contract.ts")))
@@ -646,8 +654,8 @@ export function listUnits() {
 }
 
 /** 读取单元的 4 个文件（缺失的文件返回 null）。 */
-export function readUnitFiles(name) {
-  const dir = unitDir(name);
+export function readUnitFiles(name, group = GROUP) {
+  const dir = unitDir(name, group);
   const read = (f) => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), "utf8") : null);
   return {
     contract: read("contract.ts"),
@@ -778,10 +786,10 @@ function parseBlocks(text) {
  * @param mock        演示模式（不调 API）
  * @returns {ts, md, source} 草稿内容与来源（mock | live）
  */
-export async function generateDraft(name, requirement, mock = true) {
-  const dir = unitDir(name);
+export async function generateDraft(name, requirement, mock = true, group = GROUP) {
+  const dir = unitDir(name, group);
   if (!existsSync(join(dir, "contract.ts"))) {
-    throw new Error(`功能单元不存在: ${GROUP}/features/${name}（请先执行 feat new ${name}）`);
+    throw new Error(`功能单元不存在: ${group}/features/${name}（请先执行 feat new ${name}）`);
   }
 
   let ts, md, source;
@@ -810,7 +818,7 @@ export async function generateDraft(name, requirement, mock = true) {
  * 机器初审：结构检查 + 端口引用存在性 + tsc 全项目类型检查。
  * @returns {checks: [{label, ok}], tsc: {ok, unitErrors: string[]}}
  */
-export function machineCheck(name, ts, md) {
+export function machineCheck(name, ts, md, group = GROUP) {
   const checks = [
     { label: "结构：包含 z.object 输入 schema", ok: ts.includes("z.object") },
     { label: "结构：不变量注释 ≥ 3 条", ok: (ts.match(/不变量/g) ?? []).length >= 3 },
@@ -819,7 +827,7 @@ export function machineCheck(name, ts, md) {
 
   // 端口引用检查：解析草稿里 import 的 ports 相对路径，验证对应文件真实存在
   const portRefs = [...ts.matchAll(/from "((?:\.\.\/)+ports\/[a-z-]+)"/g)].map((m) => m[1]);
-  const portsDir = join(GROUPS_DIR, GROUP, "ports");
+  const portsDir = join(GROUPS_DIR, group, "ports");
   checks.push({
     label: `端口引用：${portRefs.length ? portRefs.join(", ") : "(无)"} 均存在`,
     ok: portRefs.every((p) => {
@@ -850,8 +858,8 @@ export function machineCheck(name, ts, md) {
  * @param meta {generation, reviewer, approved, notes}
  * @returns {committed, message}
  */
-export function freeze(name, meta = {}) {
-  const dir = unitDir(name);
+export function freeze(name, meta = {}, group = GROUP) {
+  const dir = unitDir(name, group);
   const contractPath = join(dir, "contract.ts");
   const original = readFileSync(contractPath, "utf8");
 
@@ -878,8 +886,8 @@ export function freeze(name, meta = {}) {
 // ---------------------------------------------------------------------------
 
 /** 运行单单元判据（vitest 单文件），返回结构化结果。 */
-export function runUnitTest(name) {
-  const file = join(unitDir(name), "impl.test.ts");
+export function runUnitTest(name, group = GROUP) {
+  const file = join(unitDir(name, group), "impl.test.ts");
   if (!existsSync(file)) return { ok: false, summary: "无判据文件", output: "" };
 
   const r = spawnSync("npx", ["vitest", "run", file], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
@@ -910,33 +918,33 @@ export function runAllTests() {
 // ---------------------------------------------------------------------------
 
 /** 生成该单元的 AI ticket 文本（docs/agent-prompts/03 的填充版）。 */
-export function buildTicketText(name) {
+export function buildTicketText(name, group = GROUP) {
   const prompt = readFileSync(join(ROOT, "docs/agent-prompts/03-unit-implementer.md"), "utf8");
   return prompt
     .replaceAll("{FEATURE_NAME}", name)
-    .replaceAll("{GROUP}", `src/groups/${GROUP}`)
-    .replaceAll("{FEATURE_PATH}", unitDir(name));
+    .replaceAll("{GROUP}", `src/groups/${group}`)
+    .replaceAll("{FEATURE_PATH}", unitDir(name, group));
 }
 
 // ---------------------------------------------------------------------------
-// 源码浏览（限制在 src/groups 内，防路径穿越）
+// 源码浏览（限制在服务组目录内，防路径穿越）
 // ---------------------------------------------------------------------------
 
-const SRC_ROOT = join(GROUPS_DIR, GROUP);
-
 /** 读取服务组内任意源码文件（相对路径），越界返回 null。 */
-export function readSourceFile(relPath) {
-  const target = resolve(SRC_ROOT, relPath);
-  if (!target.startsWith(SRC_ROOT + "/") && target !== SRC_ROOT) return null; // 防路径穿越
+export function readSourceFile(relPath, group = GROUP) {
+  const root = join(GROUPS_DIR, group);
+  const target = resolve(root, relPath);
+  if (!target.startsWith(root + "/") && target !== root) return null; // 防路径穿越
   if (!existsSync(target)) return null;
   return readFileSync(target, "utf8");
 }
 
 /** 列出可浏览的源码文件清单（端口/适配器/组合根等）。 */
-export function listSourceFiles() {
+export function listSourceFiles(group = GROUP) {
+  const root = join(GROUPS_DIR, group);
   const out = [];
   const walk = (rel) => {
-    const dir = join(SRC_ROOT, rel);
+    const dir = join(root, rel);
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const r = rel ? `${rel}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(r);
@@ -945,4 +953,82 @@ export function listSourceFiles() {
   };
   walk("");
   return out.sort();
+}
+
+// ---------------------------------------------------------------------------
+// P2：回滚 / 端口依赖矩阵 / 错误码一致性检查
+// ---------------------------------------------------------------------------
+
+/** 单元最近提交历史（git log，最多 10 条）。 */
+export function unitHistory(name, group = GROUP) {
+  const dir = unitDir(name, group);
+  if (!existsSync(join(dir, "contract.ts"))) throw new Error(`功能单元不存在: ${group}/features/${name}`);
+  const r = spawnSync("git", ["log", "--oneline", "-10", "--", dir], { cwd: ROOT, encoding: "utf8" });
+  return r.stdout.split("\n").filter(Boolean).map((line) => {
+    const [hash, ...rest] = line.split(" ");
+    return { hash, subject: rest.join(" ") };
+  });
+}
+
+/**
+ * 回滚该单元的指定提交（git revert，生成一次反向提交，历史保留）。
+ * @param commitHash 完整或短哈希（来自 unitHistory）
+ */
+export function rollbackUnit(name, commitHash, group = GROUP) {
+  const dir = unitDir(name, group);
+  if (!existsSync(join(dir, "contract.ts"))) throw new Error(`功能单元不存在: ${group}/features/${name}`);
+  const r = spawnSync("git", ["revert", "--no-edit", commitHash], { cwd: ROOT, encoding: "utf8", timeout: 30_000 });
+  if (r.status === 0) return { ok: true, message: `已回滚 ${commitHash.slice(0, 7)}（git revert，历史保留可追溯）` };
+  // revert 失败常见原因：冲突 / 该提交已被后续提交覆盖
+  const err = (r.stderr ?? "").slice(-400) || (r.stdout ?? "").slice(-400);
+  return { ok: false, message: `回滚失败：${err}` };
+}
+
+/** 端口依赖矩阵：每个单元 import 了哪些 ports（解析契约的 import）。 */
+export function portDependencyMap(group = GROUP) {
+  const units = listUnits(group).map((name) => {
+    const contract = readUnitFiles(name, group).contract ?? "";
+    const ports = [...contract.matchAll(/from "(?:\.\.\/)+ports\/([a-z-]+)"/g)].map((m) => m[1]);
+    return { name, ports: [...new Set(ports)].sort() };
+  });
+  const allPorts = [...new Set(units.flatMap((u) => u.ports))].sort();
+  return { group, units, ports: allPorts };
+}
+
+/**
+ * 错误码一致性检查（契约 vs 实现 vs 定义）：
+ *  - spec 第 4 节声明的错误码是否都在 ports/errors.ts 定义；
+ *  - impl 实际抛出的错误码是否都在 spec 声明（防"实现漏了失败路径/加了未声明错误"）。
+ */
+export function checkErrorCodes(name, group = GROUP) {
+  const files = readUnitFiles(name, group);
+  if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
+  const errorsSrc = readSourceFile("ports/errors.ts", group) ?? "";
+
+  const defined = [...errorsSrc.matchAll(/^\s*([A-Z][A-Z_]{2,}):\s*"/gm)].map((m) => m[1]);
+  const specSection = /## 4\. 错误码[\s\S]*?(?=## 5\.)/.exec(files.spec ?? "")?.[0] ?? "";
+  const declared = [...specSection.matchAll(/`([A-Z][A-Z_]{2,})`/g)].map((m) => m[1]);
+  const thrown = [...(files.impl ?? "").matchAll(/AppError\(ErrorCodes\.([A-Z][A-Z_]{2,})/g)].map((m) => m[1]);
+
+  // INVALID_INPUT 由组合根 zod 边界兜底抛出（单元内部假定输入已合法）——不算单元漏抛
+  const boundaryCodes = ["INVALID_INPUT"];
+  const problems = [];
+  if (!declared.length) problems.push("spec 第 4 节未声明任何错误码（契约不完整）");
+  if (!thrown.length && !isImplStub(files.impl)) problems.push("impl 未抛出任何 AppError（可能漏了全部失败路径）");
+  if (isImplStub(files.impl)) problems.push("impl 还是桩（NOT_IMPLEMENTED），错误路径未实现");
+  problems.push(
+    ...declared.filter((c) => !defined.includes(c)).map((c) => `spec 声明了但 ports/errors.ts 未定义：${c}`),
+    ...thrown.filter((c) => !declared.includes(c)).map((c) => `impl 抛出了但 spec 未声明：${c}`),
+    ...declared
+      .filter((c) => !thrown.includes(c) && !boundaryCodes.includes(c))
+      .map((c) => `spec 声明了但 impl 未抛出：${c}（实现可能漏了该失败路径）`),
+  );
+  return {
+    name,
+    defined: [...new Set(defined)],
+    declaredInSpec: [...new Set(declared)],
+    thrownInImpl: [...new Set(thrown)],
+    problems,
+    ok: problems.length === 0,
+  };
 }

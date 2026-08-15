@@ -123,8 +123,10 @@
 </header>
 
 <div class="layout">
-  <!-- 左侧：功能单元列表 -->
+  <!-- 左侧：服务组 + 功能单元列表 -->
   <aside>
+    <h3>服务组</h3>
+    <select id="group-select"></select>
     <h3>功能单元</h3>
     <ul id="unit-list"></ul>
     <button class="side-btn" id="btn-new-unit">＋ 新功能单元（feat new）</button>
@@ -153,6 +155,10 @@
       <div class="card">
         <h2>服务组概览</h2>
         <div class="grid" id="overview-grid"></div>
+      </div>
+      <div class="card">
+        <h2>端口依赖矩阵（单元 → 端口）</h2>
+        <div id="ports-matrix" class="hint">加载中…</div>
       </div>
       <div class="card">
         <h2>总闸输出</h2>
@@ -186,9 +192,15 @@
           <button class="btn ghost" id="btn-judge-freeze">确认判据（冻结）</button>
           <button class="btn" id="btn-implement">AI 实现（自动迭代）</button>
         </div>
+        <div class="row" style="margin-top:10px">
+          <button class="btn ghost" id="btn-history">📜 提交历史/回滚</button>
+          <button class="btn ghost" id="btn-errorcodes">⚠️ 错误码检查</button>
+        </div>
         <div id="unit-test-output" class="output-box" style="margin-top:10px; display:none"></div>
         <div id="wiring-result" style="margin-top:10px; display:none"></div>
         <div id="ai-work-output" class="output-box" style="margin-top:10px; display:none"></div>
+        <div id="history-result" style="margin-top:10px; display:none"></div>
+        <div id="errorcodes-result" style="margin-top:10px; display:none"></div>
       </div>
     </section>
 

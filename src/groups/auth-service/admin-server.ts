@@ -31,6 +31,7 @@ import {
   GROUP,
   REVIEW_ITEMS,
   CONFIG_KEYS,
+  listGroups,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -53,6 +54,10 @@ import {
   unitStatus,
   generateWiring,
   applyWiring,
+  unitHistory,
+  rollbackUnit,
+  portDependencyMap,
+  checkErrorCodes,
 } from "../../../scripts/ai-contract-lib.mjs";
 import { loadConfig } from "./config";
 import { buildDeps, createAuthApp } from "./index";
@@ -66,6 +71,11 @@ const PUBLIC_DIR = join(ROOT, "public");
 const bizApp = createHttpApp(createAuthApp(buildDeps(loadConfig())));
 
 const app = new Hono();
+
+/** 从 query 读取服务组（默认 auth-service）；前端组切换时附带 ?group=。 */
+function groupOf(c: { req: { query(key: string): string | undefined } }): string {
+  return c.req.query("group") ?? GROUP;
+}
 
 // ---------------------------------------------------------------------------
 // 静态页面（零构建：直接读 public/ 下的 HTML/JS 返回）
@@ -85,9 +95,14 @@ app.get("/admin/app.js", (c) => {
 // 单元总览 / 详情 / 新建 / 文件编辑 / 接线检查
 // ---------------------------------------------------------------------------
 
+app.get("/admin/api/groups", (c) => {
+  return c.json({ groups: listGroups(), current: groupOf(c) });
+});
+
 app.get("/admin/api/units", (c) => {
-  const units = listUnits().map((name) => {
-    const files = readUnitFiles(name);
+  const group = groupOf(c);
+  const units = listUnits(group).map((name) => {
+    const files = readUnitFiles(name, group);
     return {
       name,
       hasContract: files.contract !== null,
@@ -98,23 +113,25 @@ app.get("/admin/api/units", (c) => {
       frozen: (files.contract ?? "").includes("冻结记录"),
     };
   });
-  return c.json({ group: GROUP, units, reviewItems: REVIEW_ITEMS });
+  return c.json({ group, units, reviewItems: REVIEW_ITEMS });
 });
 
 app.get("/admin/api/units/:name", (c) => {
   const name = c.req.param("name");
-  const files = readUnitFiles(name);
+  const group = groupOf(c);
+  const files = readUnitFiles(name, group);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
-  return c.json({ name, files });
+  return c.json({ name, group, files });
 });
 
 /** 新建功能单元（feat new 的界面入口）：body = { name } */
 app.post("/admin/api/units", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { name } = body as { name?: string };
+  const group = groupOf(c);
   try {
-    createUnit(name ?? "");
-    return c.json({ ok: true, name });
+    createUnit(name ?? "", group);
+    return c.json({ ok: true, name, group });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -126,6 +143,7 @@ app.post("/admin/api/units", async (c) => {
  */
 app.put("/admin/api/units/:name/files", async (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   const body = await c.req.json().catch(() => ({}));
   const { file, content, note } = body as {
     file?: "contract" | "spec" | "impl" | "test";
@@ -136,7 +154,7 @@ app.put("/admin/api/units/:name/files", async (c) => {
     return c.json({ error: "content 必须是字符串" }, 400);
   }
   try {
-    return c.json(saveUnitFile(name, file ?? "impl", content, note ?? ""));
+    return c.json(saveUnitFile(name, file ?? "impl", content, note ?? "", group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -145,16 +163,18 @@ app.put("/admin/api/units/:name/files", async (c) => {
 /** 接线检查：组合根/HTTP/manifest 是否已接入该单元。 */
 app.get("/admin/api/units/:name/wiring", (c) => {
   const name = c.req.param("name");
-  const files = readUnitFiles(name);
+  const group = groupOf(c);
+  const files = readUnitFiles(name, group);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
-  return c.json(checkWiring(name));
+  return c.json(checkWiring(name, group));
 });
 
 /** 一键接线：生成 diff（不落盘）——人审阅。 */
 app.get("/admin/api/units/:name/wiring/preview", (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   try {
-    return c.json(generateWiring(name));
+    return c.json(generateWiring(name, group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -163,10 +183,11 @@ app.get("/admin/api/units/:name/wiring/preview", (c) => {
 /** 一键接线：人确认后落盘 + git 提交。body = { note? } */
 app.post("/admin/api/units/:name/wiring/apply", async (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   const body = await c.req.json().catch(() => ({}));
   const { note } = body as { note?: string };
   try {
-    return c.json(applyWiring(name, note ?? ""));
+    return c.json(applyWiring(name, note ?? "", group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -175,7 +196,7 @@ app.post("/admin/api/units/:name/wiring/apply", async (c) => {
 /** 开发向导状态：契约冻结/判据/实现/接线/上线 五步进度。 */
 app.get("/admin/api/units/:name/status", (c) => {
   const name = c.req.param("name");
-  const status = unitStatus(name);
+  const status = unitStatus(name, groupOf(c));
   if (!status) return c.json({ error: `功能单元不存在: ${name}` }, 404);
   return c.json(status);
 });
@@ -183,10 +204,11 @@ app.get("/admin/api/units/:name/status", (c) => {
 /** AI 生成判据（Agent-B）：body = { mock }。生成草稿 → 人确认 → 冻结。 */
 app.post("/admin/api/units/:name/judge", async (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   const body = await c.req.json().catch(() => ({}));
   const { mock = true } = body as { mock?: boolean };
   try {
-    const r = await generateJudgeTest(name, mock);
+    const r = await generateJudgeTest(name, mock, group);
     return c.json(r);
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
@@ -196,10 +218,11 @@ app.post("/admin/api/units/:name/judge", async (c) => {
 /** 冻结判据（人确认后）：body = { reviewer? }。 */
 app.post("/admin/api/units/:name/judge/freeze", async (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   const body = await c.req.json().catch(() => ({}));
   const { reviewer } = body as { reviewer?: string };
   try {
-    return c.json(freezeJudge(name, reviewer ?? "管理台操作员"));
+    return c.json(freezeJudge(name, reviewer ?? "管理台操作员", group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -208,11 +231,57 @@ app.post("/admin/api/units/:name/judge/freeze", async (c) => {
 /** 内置实现器（Agent-C 自动迭代）：body = { mock, maxRounds }。 */
 app.post("/admin/api/units/:name/implement", async (c) => {
   const name = c.req.param("name");
+  const group = groupOf(c);
   const body = await c.req.json().catch(() => ({}));
   const { mock = true, maxRounds = 5 } = body as { mock?: boolean; maxRounds?: number };
   try {
-    const r = await implementUnit(name, { mock, maxRounds });
+    const r = await implementUnit(name, { mock, maxRounds }, group);
     return c.json(r);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P2：提交历史 / 回滚 / 端口依赖矩阵 / 错误码一致性
+// ---------------------------------------------------------------------------
+
+/** 单元最近提交历史（供回滚面板选择）。 */
+app.get("/admin/api/units/:name/history", (c) => {
+  const name = c.req.param("name");
+  const group = groupOf(c);
+  try {
+    return c.json({ name, group, commits: unitHistory(name, group) });
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 回滚该单元的指定提交：body = { commit }。git revert，历史保留。 */
+app.post("/admin/api/units/:name/rollback", async (c) => {
+  const name = c.req.param("name");
+  const group = groupOf(c);
+  const body = await c.req.json().catch(() => ({}));
+  const { commit } = body as { commit?: string };
+  if (!commit) return c.json({ error: "缺少 commit 哈希" }, 400);
+  try {
+    return c.json(rollbackUnit(name, commit, group));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 端口依赖矩阵：每个单元依赖哪些端口。 */
+app.get("/admin/api/ports/map", (c) => {
+  return c.json(portDependencyMap(groupOf(c)));
+});
+
+/** 错误码一致性检查：spec 声明 vs impl 抛出 vs errors.ts 定义。 */
+app.get("/admin/api/units/:name/errorcodes", (c) => {
+  const name = c.req.param("name");
+  const group = groupOf(c);
+  try {
+    return c.json(checkErrorCodes(name, group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
@@ -394,20 +463,21 @@ app.post("/admin/api/play", async (c) => {
 
 app.get("/admin/api/ticket/:name", (c) => {
   const name = c.req.param("name");
-  const files = readUnitFiles(name);
+  const group = groupOf(c);
+  const files = readUnitFiles(name, group);
   if (!files.contract) return c.json({ error: `功能单元不存在: ${name}` }, 404);
-  return c.json({ name, ticket: buildTicketText(name) });
+  return c.json({ name, ticket: buildTicketText(name, group) });
 });
 
 app.get("/admin/api/source", (c) => {
   const file = c.req.query("file") ?? "";
-  const content = readSourceFile(file);
+  const content = readSourceFile(file, groupOf(c));
   if (content === null) return c.json({ error: `文件不存在或越界: ${file}` }, 404);
   return c.json({ file, content });
 });
 
 app.get("/admin/api/source/list", (c) => {
-  return c.json({ files: listSourceFiles() });
+  return c.json({ files: listSourceFiles(groupOf(c)) });
 });
 
 // ---------------------------------------------------------------------------
