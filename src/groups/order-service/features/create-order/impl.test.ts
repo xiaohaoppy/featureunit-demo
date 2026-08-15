@@ -1,16 +1,15 @@
 /**
- * [角色] 功能单元：create-order —— 判据（冻结区）
- * AI 的"完成标准"：AI 不得修改本文件（改了判据 = 作弊）。
- * TODO(人/契约评审)：契约冻结后，把不变量逐条翻译成测试。
- * 全部使用内存适配器（src/groups/<组>/adapters/memory/**），不依赖基础设施。
+ * [角色] 功能单元：create-order —— 判据（草稿，模拟 AI 生成，未冻结）
+ * 每条不变量一个 it；body 为显式 TODO（必红），请逐条补全断言。
+ * 判据作者（Agent-B）纪律：禁止占位断言、禁止改契约/实现。
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import { createOrder } from "./impl";
 
 describe("create-order 单元判据", () => {
-  it("TODO: 不变量 1", async () => {
-    // TODO: 组装内存适配器 → 调用 createOrder → 断言结果/错误码
-    expect(true).toBe(true);
+  it("不变量1｜token 有效时执行操作", async () => {
+    // TODO: 组装内存适配器 → 调用 createOrder → 断言「token 有效时执行操作」
+    throw new Error("TODO: 断言不变量1（token 有效时执行操作）");
   });
 });

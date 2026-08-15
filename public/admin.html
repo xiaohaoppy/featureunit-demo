@@ -177,15 +177,6 @@
         <h2 id="unit-title">单元详情（先在左侧选择单元）</h2>
         <div class="file-tabs" id="file-tabs"></div>
         <pre class="code" id="file-content">请在左侧选择一个功能单元。</pre>
-        <div id="edit-editor" style="display:none">
-          <textarea id="edit-content" style="min-height:280px;font-family:var(--mono);font-size:12.5px"></textarea>
-          <div class="row" style="margin-top:8px">
-            <input type="text" id="edit-note" placeholder="修改说明（必填，写入 git 提交信息）" style="flex:1" />
-            <button class="btn" id="btn-edit-save">保存（git 留痕）</button>
-            <button class="btn ghost" id="btn-edit-cancel">取消</button>
-          </div>
-          <div class="msg warn" style="margin-top:8px" id="edit-warning">正在编辑<span id="edit-warning-file"></span>。冻结区文件（契约/判据/规格）由人编辑是允许的，但每次保存都会留下 git 记录——请填写修改说明。</div>
-        </div>
         <div class="row" style="margin-top:12px">
           <button class="btn" id="btn-run-unit">运行本单元判据</button>
           <button class="btn ghost" id="btn-edit-toggle">编辑当前文件</button>
@@ -343,15 +334,6 @@
           <span class="hint" id="port-detail-status"></span>
         </div>
         <pre class="code" id="port-detail-content"></pre>
-        <div id="port-edit-editor" style="display:none;margin-top:8px">
-          <textarea id="port-edit-content" style="min-height:260px;font-family:var(--mono);font-size:12.5px"></textarea>
-          <div class="row" style="margin-top:8px">
-            <input type="text" id="port-edit-note" placeholder="修改说明（必填，写入 git 提交信息）" style="flex:1" />
-            <button class="btn" id="btn-port-edit-save">保存（git 留痕）</button>
-            <button class="btn ghost" id="btn-port-edit-cancel">取消</button>
-          </div>
-          <div class="msg warn" style="margin-top:8px">端口是冻结区文件——人编辑允许，但每次保存强制 git 留痕，请填写修改说明。</div>
-        </div>
       </div>
     </section>
 
@@ -392,6 +374,20 @@
       </div>
     </section>
   </main>
+</div>
+
+<!-- 共享文件编辑器（单元/端口详情共用：人编辑 + 必填说明 + git 留痕） -->
+<div id="editor-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,20,35,.55); z-index:50; align-items:center; justify-content:center;">
+  <div style="background:var(--panel); border-radius:12px; width:min(860px,92vw); max-height:86vh; overflow:auto; padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.3);">
+    <h3 id="editor-title" style="margin-bottom:10px"></h3>
+    <div class="msg warn" id="editor-warning" style="display:none; margin-bottom:10px"></div>
+    <textarea id="editor-content" style="min-height:300px;font-family:var(--mono);font-size:12.5px;width:100%;box-sizing:border-box"></textarea>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="editor-note" placeholder="修改说明（必填，写入 git 提交信息）" style="flex:1" />
+      <button class="btn" id="btn-editor-save">保存（git 留痕）</button>
+      <button class="btn ghost" id="btn-editor-cancel">取消</button>
+    </div>
+  </div>
 </div>
 
 <script src="/admin/app.js"></script>
