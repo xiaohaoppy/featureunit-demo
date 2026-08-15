@@ -72,7 +72,8 @@ export function resolveConfigValue(key, fallback = "") {
 export const CONFIG_KEYS = [
   { key: "AI_API_KEY", label: "AI 密钥（OpenAI 兼容 API）", secret: true, fallback: "" },
   { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
-  { key: "AI_MODEL", label: "AI 模型名（V4 系列；deepseek-chat 已停用）", secret: false, fallback: "deepseek-v4-flash" },
+  { key: "AI_MODEL", label: "AI 模型名（保存时自动从 API 获取列表）", secret: false, fallback: "deepseek-v4-flash", options: ["deepseek-v4-flash", "deepseek-v4-pro"] },
+  { key: "AI_REASONING", label: "推理等级（low=快/省 high=深度推理）", secret: false, fallback: "medium", options: ["low", "medium", "high"] },
   { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
   { key: "USER_STORE", label: "存储模式", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
   { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/auth-service.db" },
@@ -767,18 +768,25 @@ async function callLLM(prompt) {
   const base = resolveConfigValue("AI_BASE_URL", "https://api.deepseek.com");
   const model = resolveConfigValue("AI_MODEL", "deepseek-v4-flash");
 
+  // 推理等级 → 采样参数（所有 OpenAI 兼容 API 都认 temperature；
+  // high 时附 reasoning_effort，V4 系列模型可据此进入深度推理模式）
+  const reasoning = resolveConfigValue("AI_REASONING", "medium");
+  const TEMPERATURE = { low: 0.7, medium: 0.3, high: 0.1 };
+  const body = {
+    model,
+    messages: [
+      { role: "system", content: prompt.system },
+      { role: "user", content: prompt.user },
+    ],
+    temperature: TEMPERATURE[reasoning] ?? 0.3,
+    max_tokens: 4000,
+  };
+  if (reasoning === "high") body.reasoning_effort = "high"; // 深度推理模式
+
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: prompt.system },
-        { role: "user", content: prompt.user },
-      ],
-      temperature: 0.2,
-      max_tokens: 4000,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);
@@ -786,6 +794,21 @@ async function callLLM(prompt) {
   }
   const data = await res.json();
   return data.choices?.[0]?.message?.content ?? "";
+}
+
+/**
+ * 自动获取可用模型列表（OpenAI 兼容 GET /models）。
+ * 管理台配置面板用它填充 AI_MODEL 下拉——不用手填模型名。
+ * 需要已配置 AI_API_KEY；失败抛错（调用方做兜底）。
+ */
+export async function fetchModels() {
+  const key = resolveConfigValue("AI_API_KEY");
+  if (!key) throw new Error("未配置 AI_API_KEY，无法获取模型列表");
+  const base = resolveConfigValue("AI_BASE_URL", "https://api.deepseek.com");
+  const res = await fetch(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new Error(`模型列表获取失败 (${res.status})`);
+  const data = await res.json();
+  return (data.data ?? []).map((m) => m.id).sort();
 }
 
 /** 从模型回复中提取 ts / md 两个代码块。 */

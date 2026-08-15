@@ -100,6 +100,7 @@ export function analyzeRequirement(
   unitDescription: string;
   reasons: string[];
 };
+export function fetchModels(): Promise<string[]>;
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

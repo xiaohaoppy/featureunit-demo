@@ -40,6 +40,7 @@ import {
   savePortFile,
   generateWiringDraft,
   analyzeRequirement,
+  fetchModels,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -630,10 +631,25 @@ app.post("/admin/api/ai/freeze", async (c) => {
 // 配置管理（含密钥：默认打码；写入 .featureunit.local.json，不进 git）
 // ---------------------------------------------------------------------------
 
+/** 模型列表缓存（60 秒内不重复请求 /models）。 */
+let modelsCache: { at: number; ids: string[] } | null = null;
+
+/** 自动获取模型列表；失败（无 Key/网络）→ 兜底默认列表。 */
+async function cachedModels(): Promise<string[]> {
+  if (modelsCache && Date.now() - modelsCache.at < 60_000) return modelsCache.ids;
+  try {
+    const ids = await fetchModels();
+    modelsCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return CONFIG_KEYS.find((k) => k.key === "AI_MODEL")?.options ?? ["deepseek-v4-flash"];
+  }
+}
+
 /** 配置面板视图：每个 key 的当前生效值 + 来源（本地文件/环境变量/默认值）+ 可选选项。 */
-function configView() {
+async function configView() {
   const local = readLocalConfig();
-  const values = CONFIG_KEYS.map(({ key, label, secret, fallback, options }) => {
+  const values = await Promise.all(CONFIG_KEYS.map(async ({ key, label, secret, fallback, options }) => {
     const fromLocal = key in local;
     const fromEnv = process.env[key] !== undefined && process.env[key] !== "";
     const value = resolveConfigValue(key, fallback);
@@ -641,13 +657,14 @@ function configView() {
       key,
       label,
       secret,
-      options,
+      // AI_MODEL：自动从 API 拉取可用模型（失败时用静态兜底列表）
+      options: key === "AI_MODEL" ? await cachedModels() : options,
       fallback, // 供前端显示"默认值"占位
       value: secret && value ? maskSecret(value) : value,
       hasValue: value !== "",
       source: fromLocal ? "本地配置文件" : fromEnv ? "环境变量" : "默认值",
     };
-  });
+  }));
   return { values, localPath: "featureunit-demo/.featureunit.local.json（已在 .gitignore）" };
 }
 
@@ -658,8 +675,8 @@ function maskSecret(v: string): string {
 }
 
 /** 读取配置面板视图（密钥打码）。 */
-app.get("/admin/api/config", (c) => {
-  return c.json(configView());
+app.get("/admin/api/config", async (c) => {
+  return c.json(await configView());
 });
 
 /**
@@ -681,7 +698,7 @@ app.put("/admin/api/config", async (c) => {
     clean[key] = typeof value === "string" ? value.trim() : String(value ?? "");
   }
   writeLocalConfig(clean);
-  return c.json(configView());
+  return c.json(await configView());
 });
 
 // ---------------------------------------------------------------------------
