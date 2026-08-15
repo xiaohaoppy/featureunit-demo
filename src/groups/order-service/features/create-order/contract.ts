@@ -1,34 +1,37 @@
 /**
- * [角色] 功能单元：create-order —— 契约（冻结区）
- * 谁可以改：只有人（契约演进流程）。AI 实现任务中【禁止】修改本文件。
- * 填写指南：docs/contract-template.md（六要素）
+ * 冻结记录（机器生成，勿手改）：
+ *   - 生成方式: 模拟 AI
+ *   - 评审人: 流水线确认（人，2026-08-15）
+ *   - 评审结果: 10/10 项通过
+ *   - 冻结后任何修改必须走契约演进流程
+ */
+/**
+ * [角色] 功能单元：create-order —— 契约（草稿 v0.1，模拟 AI 生成，未冻结）
  */
 
 import { z } from "zod";
+import type { UserStore } from "../../ports/user-store";
+import type { SessionStore } from "../../ports/session-store";
+import type { Logger } from "../../ports/logger";
 
-// TODO(人/契约设计师)：定义输入 schema（含边界规则，见模板第 2 节）
 export const CreateOrderInput = z.object({
-  // example: email: z.string().email(),
+  token: z.string().min(1),
+  payload: z.any(), // TODO: 具体字段待定
 });
 
 export type CreateOrderInput = z.infer<typeof CreateOrderInput>;
 
-// TODO：声明依赖端口（只允许纯数据 + 接口，禁止 ORM/HTTP/框架类型）
 export interface CreateOrderDeps {
-  // example: users: UserStore;
-}
-
-export interface CreateOrderResult {
-  // example: ok: true;
+  users: UserStore;
+  sessions: SessionStore;
+  logger: Logger;
 }
 
 export interface CreateOrder {
-  (input: CreateOrderInput, deps: CreateOrderDeps): Promise<CreateOrderResult>;
+  (input: CreateOrderInput, deps: CreateOrderDeps): Promise<void>;
 }
 
 /**
- * 不变量（≥3 条，条条可被测试断言；impl.test.ts 会逐条验证）：
- * 1. TODO
- * 2. TODO
- * 3. TODO
+ * 不变量：
+ * 1. token 有效时执行操作
  */
