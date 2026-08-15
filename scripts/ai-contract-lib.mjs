@@ -1342,7 +1342,8 @@ export async function generatePort(name, description, mock = true, group = GROUP
     // 典型缺陷草稿：① import redis（泄漏实现）② 同步返回（外部世界是异步的）
     // ③ 无幂等/失败约定注释 ④ 无"时钟由调用方注入"设计
     content = `/**
- * [角色] 端口：${P} —— ${description ?? "（待补用途说明）"}（草稿 v0.1，模拟 AI 生成，未冻结）
+ * [角色] 端口：${P} —— 草稿 v0.1（模拟 AI 生成，未冻结）
+ * 一句话：${description ?? "（待补用途说明）"}
  */
 
 // ⚠️ 缺陷：端口接口禁止依赖具体存储（实现细节泄漏）
