@@ -1039,6 +1039,61 @@ $("btn-port-edit-save").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// AI 打包（Agent-E）：生成接线草稿 → 机器预演 → 人确认落盘/复制
+// ---------------------------------------------------------------------------
+
+$("btn-pack").addEventListener("click", async () => {
+  if (!state.selectedUnit) return;
+  const box = $("pack-result");
+  box.style.display = "block";
+  box.innerHTML = "AI 打包中（mock=规则生成+tsc 预演）…";
+  const btn = $("btn-pack");
+  btn.disabled = true;
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/wiring/ai`, {
+      method: "POST", body: JSON.stringify({ mock: true }),
+    });
+    let html = `<div class="msg ${r.preflight.ok ? "ok" : "err"}">${escapeHtml(r.preflight.summary)}</div>`;
+    html += `<div class="hint">来源：${escapeHtml(r.source)}</div>`;
+
+    // 展示每个文件的接线 diff（人审阅）
+    for (const f of r.files) {
+      html += `<div style="font-weight:600;margin:8px 0 4px">${escapeHtml(f.path)}</div>`;
+      html += `<pre class="code" style="max-height:260px">${escapeHtml(f.diffText)}</pre>`;
+    }
+
+    // 人确认落盘（预演已证明可编译）
+    if (r.preflight.ok && !r.preflight.alreadyWired) {
+      html += `<div class="row" style="margin-top:10px">
+        <button class="btn" id="btn-pack-apply">确认落盘（git 提交）</button>
+        <span class="hint">预演已通过 tsc——落盘即上线接线</span>
+      </div>`;
+    }
+    box.innerHTML = html;
+
+    const applyBtn = $("btn-pack-apply");
+    if (applyBtn) {
+      applyBtn.addEventListener("click", async () => {
+        applyBtn.disabled = true;
+        try {
+          const res = await api(`/admin/api/units/${state.selectedUnit}/wiring/apply`, {
+            method: "POST", body: JSON.stringify({ note: "AI 打包（Agent-E）确认" }),
+          });
+          box.innerHTML = `<div class="msg ${res.ok ? "ok" : "err"}">${escapeHtml(res.message)}</div>`;
+          await loadUnits();
+        } catch (err) {
+          box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+        }
+      });
+    }
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------------------
 // 初始化
 // ---------------------------------------------------------------------------
 

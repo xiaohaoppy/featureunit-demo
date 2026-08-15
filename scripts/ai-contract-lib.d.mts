@@ -64,6 +64,30 @@ export function savePortFile(
   note?: string,
   group?: string,
 ): { saved: boolean; committed: boolean; message: string };
+export function preflightWiring(name: string, group?: string): {
+  ok: boolean;
+  alreadyWired: boolean;
+  files: Array<{ path: string; before: string; after: string; diffText: string }>;
+  summary: string;
+};
+export function generateWiringDraft(
+  name: string,
+  opts?: { mock?: boolean },
+  group?: string,
+): Promise<{
+  source: string;
+  name: string;
+  preflight?: {
+    ok: boolean;
+    alreadyWired: boolean;
+    files: Array<{ path: string; before: string; after: string; diffText: string }>;
+    summary: string;
+  };
+  files?: Array<{ path: string; diffText: string }>;
+  checks?: Array<{ label: string; ok: boolean }>;
+  raw?: string;
+  machineOk?: boolean;
+}>;
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

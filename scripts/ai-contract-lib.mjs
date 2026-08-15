@@ -1495,3 +1495,84 @@ export function savePortFile(name, content, note = "", group = GROUP) {
       : `已保存到磁盘，但 git 提交失败（${commit.stderr?.toString().trim() || "内容无变化"}）`,
   };
 }
+
+// ---------------------------------------------------------------------------
+// 打包（Agent-E）：AI 辅助生成组合根接线 → 机器预演(tsc) → 人粘贴/确认
+// ---------------------------------------------------------------------------
+
+/**
+ * 接线预演（mock 模式用）：把规则生成的接线写入文件 → 跑 tsc → 自动还原。
+ * 机器判据：可编译才允许人确认；还原保证仓库不被预演污染。
+ * @returns { ok, files, summary }——ok = tsc 通过
+ */
+export function preflightWiring(name, group = GROUP) {
+  const { alreadyWired, files } = generateWiring(name, group);
+  if (alreadyWired) return { ok: true, alreadyWired: true, files: [], summary: "该单元已接线，无需改动" };
+  if (!files.length) return { ok: false, alreadyWired: false, files: [], summary: "无法生成接线改动（锚点缺失）" };
+
+  // 写入 → tsc → 还原（不提交，仓库零污染）
+  for (const f of files) writeFileSync(join(GROUPS_DIR, group, f.path), f.after);
+  const tsc = spawnSync("npx", ["tsc", "--noEmit"], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
+  for (const f of files) spawnSync("git", ["checkout", "-q", "--", join(GROUPS_DIR, group, f.path)], { cwd: ROOT });
+
+  const errors = (tsc.stdout + tsc.stderr).split("\n").filter(Boolean).length;
+  return {
+    ok: tsc.status === 0,
+    alreadyWired: false,
+    files,
+    summary: tsc.status === 0
+      ? `✅ 预演通过：接线可编译（${files.length} 个文件，tsc 全项目 0 错误）`
+      : `❌ 预演失败：接线后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
+  };
+}
+
+/**
+ * 打包助手（Agent-E）：生成接线草稿。
+ * - mock 模式：规则生成（generateWiring）+ tsc 预演（机器判据，自动还原）；
+ * - 真实模式：调 API（06-composition-drafter.md），产出三段粘贴片段 + 结构初审
+ *   （机器检查关键模式），人粘贴后自行跑总闸验证。
+ */
+export async function generateWiringDraft(name, { mock = true } = {}, group = GROUP) {
+  const files = readUnitFiles(name, group);
+  if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
+
+  if (mock) {
+    const preflight = preflightWiring(name, group);
+    return {
+      source: "mock（规则生成 + tsc 预演）",
+      name,
+      preflight,
+      files: preflight.files.map((f) => ({ path: f.path, diffText: f.diffText })),
+    };
+  }
+
+  // 真实模式：AI 生成三段片段
+  const contract = files.contract;
+  const existing = [
+    "===== index.ts =====",
+    readSourceFile("index.ts", group) ?? "",
+    "===== adapters/http.ts =====",
+    readSourceFile("adapters/http.ts", group) ?? "",
+    "===== manifest.json =====",
+    readSourceFile("manifest.json", group) ?? "",
+  ].join("\n");
+  const promptText = readFileSync(join(ROOT, "docs/agent-prompts/06-composition-drafter.md"), "utf8")
+    .replace("{CONTRACT_CONTENT}", contract)
+    .replace("{EXISTING_FILES}", existing);
+  const raw = await callLLM({
+    system: promptText,
+    user: `单元名：${name}（服务组 ${group}）\n只输出三个代码块：ts(index) / ts(http) / json(manifest)。`,
+  });
+
+  // 结构初审：关键模式检查（真实片段无法自动应用，机器检查"该有的都有"）
+  const P = pascal(name);
+  const c = camel(name);
+  const checks = [
+    { label: `index 片段含 import（features/${name}/impl）`, ok: raw.includes(`features/${name}/impl`) },
+    { label: `index 片段含接线方法 ${c}(input) => ${c}(parseOrThrow`, ok: raw.includes(`${c}: (input) => ${c}(parseOrThrow(${P}Input`) },
+    { label: `index 片段含 to${P}Deps 依赖装配`, ok: raw.includes(`to${P}Deps`) && raw.includes(`${P}Deps`) },
+    { label: "http 片段含路由 /api/" + name, ok: raw.includes(`/api/${name}`) },
+    { label: "manifest 片段含版本登记", ok: raw.includes(`"${name}"`) },
+  ];
+  return { source: "live（AI 生成片段，人粘贴后跑总闸）", name, checks, raw, machineOk: checks.every((x) => x.ok) };
+}

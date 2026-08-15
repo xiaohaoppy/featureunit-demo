@@ -38,6 +38,7 @@ import {
   generatePort,
   freezePort,
   savePortFile,
+  generateWiringDraft,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -217,6 +218,19 @@ app.post("/admin/api/units/:name/wiring/apply", async (c) => {
   const { note } = body as { note?: string };
   try {
     return c.json(applyWiring(name, note ?? "", group));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** AI 打包助手（Agent-E）：body = { mock }。mock=规则+tsc预演；真实=AI 片段+结构初审。 */
+app.post("/admin/api/units/:name/wiring/ai", async (c) => {
+  const name = c.req.param("name");
+  const group = groupOf(c);
+  const body = await c.req.json().catch(() => ({}));
+  const { mock = true } = body as { mock?: boolean };
+  try {
+    return c.json(await generateWiringDraft(name, { mock }, group));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
