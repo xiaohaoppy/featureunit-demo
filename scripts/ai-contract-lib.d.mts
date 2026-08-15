@@ -58,6 +58,12 @@ export function freezePort(
   reviewer?: string,
   group?: string,
 ): { committed: boolean; message: string };
+export function savePortFile(
+  name: string,
+  content: string,
+  note?: string,
+  group?: string,
+): { saved: boolean; committed: boolean; message: string };
 export function listUnits(group?: string): string[];
 export function readUnitFiles(name: string, group?: string): {
   contract: string | null;

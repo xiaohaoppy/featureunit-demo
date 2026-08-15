@@ -22,6 +22,7 @@ const state = {
   aiDraft: null,           // AI 生成的草稿 {ts, md, checks, tsc}
   aiTab: "ts",             // 草稿预览 tab
   aiReviews: [],           // 10 项评审结果（true=通过 / false=打回 / null=未答）
+  portDetail: null,        // 端口详情 {name, content, frozen}
 };
 
 const $ = (id) => document.getElementById(id);
@@ -900,10 +901,15 @@ async function loadPorts() {
         <div class="hint" style="margin-top:6px">${p.usedBy.map((u) => `<code>${escapeHtml(u)}</code>`).join(" ")}</div>`;
       card.addEventListener("click", async () => {
         $("port-detail-card").style.display = "block";
+        $("port-edit-editor").style.display = "none";
+        $("port-detail-content").style.display = "";
         $("port-detail-title").textContent = `端口详情：${p.name}（${p.interfaceName}）`;
         $("port-detail-content").textContent = "加载中…";
         try {
           const src = await api(`/admin/api/source?file=ports/${p.name}.ts`);
+          const frozen = src.content.includes("冻结记录");
+          state.portDetail = { name: p.name, content: src.content, frozen };
+          $("port-detail-status").textContent = frozen ? "🔒 已冻结（编辑将 git 留痕）" : "📄 草稿（未冻结）";
           const adapterLine = p.adapters.length
             ? `\n\n—— 适配器实现：\n${p.adapters.map((a) => `  ${a}`).join("\n")}`
             : "\n\n—— ⚠️ 暂无适配器实现（单元将无法注入该端口）";
@@ -987,6 +993,46 @@ $("btn-port-freeze").addEventListener("click", async () => {
     await loadPorts();
   } catch (err) {
     $("port-ai-hint").textContent = `冻结失败：${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// 端口编辑（人编辑 + git 留痕）
+$("btn-port-edit").addEventListener("click", () => {
+  if (!state.portDetail) return;
+  $("port-edit-content").value = state.portDetail.content;
+  $("port-edit-note").value = "";
+  $("port-detail-content").style.display = "none";
+  $("port-edit-editor").style.display = "block";
+});
+
+$("btn-port-edit-cancel").addEventListener("click", () => {
+  $("port-edit-editor").style.display = "none";
+  $("port-detail-content").style.display = "";
+});
+
+$("btn-port-edit-save").addEventListener("click", async () => {
+  const note = $("port-edit-note").value.trim();
+  if (!note) {
+    alert("请填写修改说明（会写进 git 提交信息）");
+    return;
+  }
+  const btn = $("btn-port-edit-save");
+  btn.disabled = true;
+  try {
+    const r = await api(`/admin/api/ports/${state.portDetail.name}`, {
+      method: "PUT",
+      body: JSON.stringify({ content: $("port-edit-content").value, note }),
+    });
+    state.portDetail.content = $("port-edit-content").value;
+    $("port-edit-editor").style.display = "none";
+    $("port-detail-content").style.display = "";
+    $("port-detail-content").textContent = state.portDetail.content;
+    alert(r.message);
+    await loadPorts(); // 刷新描述（可能变了）
+  } catch (err) {
+    alert(`保存失败：${err.message}`);
   } finally {
     btn.disabled = false;
   }

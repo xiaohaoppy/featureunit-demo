@@ -1326,27 +1326,59 @@ function methodsWithoutDocs(content) {
  * 从端口描述提取语义，建议贴合的方法骨架（mock 模式用）。
  * 关键词 → 方法模板；默认给 CRUD 骨架。返回 [{ sig, doc }]。
  */
+/**
+ * 从端口描述提取语义，建议贴合的方法骨架（mock 模式用）。
+ * 关键词 → 方法模板；默认给 CRUD 骨架。
+ * 返回 [{ sig, doc, types? }]——types 为方法引用的内联类型定义（保证草稿可编译）。
+ */
 function suggestMethods(description) {
   const d = description ?? "";
   if (/验证|凭证|token|令牌|验证码|一次性|verify|code/i.test(d)) {
-    return [
-      { sig: "issue(target: string, ttlMs: number): Promise<string>", doc: "签发一次性凭证（ttlMs 由调用方传入——时钟纪律）" },
-      { sig: "verify(token: string): Promise<string | null>", doc: "验证凭证并返回目标；无效/过期返回 null（幂等）" },
-      { sig: "consume(token: string): Promise<void>", doc: "作废凭证（一次性使用；不存在静默忽略）" },
-    ];
+    return {
+      methods: [
+        { sig: "issue(target: string, ttlMs: number): Promise<string>", doc: "签发一次性凭证（ttlMs 由调用方传入——时钟纪律）" },
+        { sig: "verify(token: string): Promise<string | null>", doc: "验证凭证并返回目标；无效/过期返回 null（幂等）" },
+        { sig: "consume(token: string): Promise<void>", doc: "作废凭证（一次性使用；不存在静默忽略）" },
+      ],
+    };
   }
   if (/订单|order|交易|trade/i.test(d)) {
-    return [
-      { sig: "findById(id: string): Promise<OrderRecord | null>", doc: "按 id 查订单；不存在返回 null（幂等）" },
-      { sig: "create(order: OrderRecord): Promise<void>", doc: "创建订单（id 冲突覆盖）" },
-      { sig: "updateStatus(id: string, status: OrderStatus): Promise<void>", doc: "更新状态（id 不存在静默忽略）" },
-    ];
+    return {
+      methods: [
+        { sig: "findById(id: string): Promise<OrderRecord | null>", doc: "按 id 查订单；不存在返回 null（幂等）" },
+        { sig: "create(order: OrderRecord): Promise<void>", doc: "创建订单（id 冲突覆盖）" },
+        { sig: "updateStatus(id: string, status: OrderStatus): Promise<void>", doc: "更新状态（id 不存在静默忽略）" },
+      ],
+      types: `/** 纯数据：订单实体（草稿内联定义——真实字段由人拍板）。 */
+export interface OrderRecord {
+  id: string;
+  userId: string;
+  status: OrderStatus;
+}
+
+export type OrderStatus = "pending" | "paid" | "shipped" | "cancelled";`,
+    };
   }
-  return [
-    { sig: "findById(id: string): Promise<Xxx | null>", doc: "按 id 查找；不存在返回 null（幂等）" },
-    { sig: "save(record: Xxx): Promise<void>", doc: "保存（冲突覆盖）" },
-    { sig: "delete(id: string): Promise<void>", doc: "删除（不存在静默忽略）" },
-  ];
+  return {
+    methods: [
+      { sig: "findById(id: string): Promise<Xxx | null>", doc: "按 id 查找；不存在返回 null（幂等）" },
+      { sig: "save(record: Xxx): Promise<void>", doc: "保存（冲突覆盖）" },
+      { sig: "delete(id: string): Promise<void>", doc: "删除（不存在静默忽略）" },
+    ],
+    types: `/** 占位实体类型——请替换为真实定义。 */
+export interface Xxx {
+  id: string;
+}`,
+  };
+}
+
+/**
+ * 统计 interface 中返回类型不是 Promise 的方法数（仅看方法签名，不看数据字段）。
+ */
+function nonPromiseMethodCount(content) {
+  const body = /export\s+interface\s+\w+\s*\{([\s\S]*?)\n\}/.exec(content ?? "")?.[1] ?? "";
+  const sigs = [...body.matchAll(/^\s*\w+\([^;]*\):\s*([^;]+);/gm)];
+  return sigs.filter((m) => !m[1].trim().startsWith("Promise")).length;
 }
 
 /**
@@ -1363,7 +1395,7 @@ export function machineCheckPort(content) {
     { label: "纪律：零 import（端口接口不依赖任何外部包）", ok: !/^\s*import\s/m.test(content) },
     { label: "纪律：无基础设施字样（pg/redis/express/knex…）", ok: !/\b(pg|redis|express|knex|prisma|mongoose|mysql)\b/i.test(content) },
     { label: "结构：有一句话用途", ok: /一句话[:：]/.test(content) },
-    { label: "惯例：方法返回 Promise", ok: !/:\s*(string|number|boolean|void|Date)(\s|;|\n|$)/.test(content.replace(/\/\*[\s\S]*?\*\//g, "")) },
+    { label: `惯例：方法返回 Promise${nonPromiseMethodCount(content) ? `（${nonPromiseMethodCount(content)} 个非异步方法）` : ""}`, ok: nonPromiseMethodCount(content) === 0 },
     { label: `纪律：每个方法都有 JSDoc 语义注释${bad.length ? `（缺: ${bad.join(", ")}）` : ""}`, ok: bad.length === 0 },
   ];
   return { checks, ok: checks.every((c) => c.ok) };
@@ -1387,19 +1419,21 @@ export async function generatePort(name, description, mock = true, group = GROUP
   let content;
   if (mock) {
     // "坏学生"草稿：语义贴合描述（suggestMethods），但保留两个纪律缺陷供评审抓：
-    // ① import redis（泄漏实现细节）② 方法缺失 JSDoc（新增检查项）
-    const methods = suggestMethods(description);
+    // ① 违规 import（注释展示——不破坏编译，评审可见）② 方法缺失 JSDoc。
+    // 重要：草稿必须可编译（类型内联、违规 import 注释化），否则会破坏 tsc 总闸。
+    const { methods, types } = suggestMethods(description);
     content = `/**
  * [角色] 端口：${P} —— 草稿 v0.1（模拟 AI 生成，未冻结）
  * 一句话：${description ?? "（待补用途说明）"}
  */
 
-// ⚠️ 缺陷：端口接口禁止依赖具体存储（实现细节泄漏）
-import { Redis } from "redis";
+// ⚠️ 缺陷：端口接口禁止依赖具体存储（实现细节泄漏）——以下 import 不允许出现在最终版本
+// import { Redis } from "redis";
 
 export interface ${P} {
 ${methods.map((m) => `  // ⚠️ 缺陷：方法缺少 JSDoc 语义注释（应有：${m.doc}）\n  ${m.sig};`).join("\n")}
 }
+${types ? "\n" + types : ""}
 `;
   } else {
     const promptText = readFileSync(join(ROOT, "docs/agent-prompts/05-port-drafter.md"), "utf8")
@@ -1432,4 +1466,28 @@ export function freezePort(name, reviewer = "管理台操作员", group = GROUP)
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
   const commit = spawnSync("git", ["commit", "-q", "-m", `port: ${name} 端口冻结（人确认）`], { cwd: ROOT });
   return { committed: commit.status === 0, message: commit.status === 0 ? `已冻结并提交: ports/${name}.ts` : "冻结记录已写入，git 提交失败" };
+}
+
+// ---------------------------------------------------------------------------
+// 端口文件编辑（管理台：人编辑 + git 留痕，与单元文件编辑一致）
+// ---------------------------------------------------------------------------
+
+/**
+ * 保存端口文件（管理台编辑用）。人编辑冻结区文件是允许的，
+ * 但每次保存必须 git 提交留痕（"谁在什么时候改了什么"可追溯）。
+ */
+export function savePortFile(name, content, note = "", group = GROUP) {
+  const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
+  if (!existsSync(path)) throw new Error(`端口不存在: ${group}/ports/${name}.ts`);
+
+  writeFileSync(path, content);
+  spawnSync("git", ["add", "-A"], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `admin: 编辑端口 ${name} — ${note || "（无备注）"}`], { cwd: ROOT });
+  return {
+    saved: true,
+    committed: commit.status === 0,
+    message: commit.status === 0
+      ? `已保存并提交: ports/${name}.ts`
+      : `已保存到磁盘，但 git 提交失败（${commit.stderr?.toString().trim() || "内容无变化"}）`,
+  };
 }

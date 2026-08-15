@@ -335,7 +335,20 @@
       </div>
       <div class="card" id="port-detail-card" style="display:none">
         <h2 id="port-detail-title">端口详情</h2>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn ghost" id="btn-port-edit">编辑此端口</button>
+          <span class="hint" id="port-detail-status"></span>
+        </div>
         <pre class="code" id="port-detail-content"></pre>
+        <div id="port-edit-editor" style="display:none;margin-top:8px">
+          <textarea id="port-edit-content" style="min-height:260px;font-family:var(--mono);font-size:12.5px"></textarea>
+          <div class="row" style="margin-top:8px">
+            <input type="text" id="port-edit-note" placeholder="修改说明（必填，写入 git 提交信息）" style="flex:1" />
+            <button class="btn" id="btn-port-edit-save">保存（git 留痕）</button>
+            <button class="btn ghost" id="btn-port-edit-cancel">取消</button>
+          </div>
+          <div class="msg warn" style="margin-top:8px">端口是冻结区文件——人编辑允许，但每次保存强制 git 留痕，请填写修改说明。</div>
+        </div>
       </div>
     </section>
 

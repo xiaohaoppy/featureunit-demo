@@ -37,6 +37,7 @@ import {
   createPort,
   generatePort,
   freezePort,
+  savePortFile,
   listUnits,
   readUnitFiles,
   readLocalConfig,
@@ -338,6 +339,20 @@ app.post("/admin/api/ports/:name/freeze", async (c) => {
   const { reviewer } = body as { reviewer?: string };
   try {
     return c.json(freezePort(c.req.param("name"), reviewer ?? "管理台操作员", groupOf(c)));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+  }
+});
+
+/** 编辑端口文件（人编辑 + git 留痕）：body = { content, note }。 */
+app.put("/admin/api/ports/:name", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const { content, note } = body as { content?: string; note?: string };
+  if (typeof content !== "string") {
+    return c.json({ error: "content 必须是字符串" }, 400);
+  }
+  try {
+    return c.json(savePortFile(c.req.param("name"), content, note ?? "", groupOf(c)));
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
   }
