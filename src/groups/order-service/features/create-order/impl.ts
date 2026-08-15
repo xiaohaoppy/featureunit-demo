@@ -1,11 +1,12 @@
 /**
- * [角色] 功能单元：create-order —— 实现（AI 写入区）
- * 本文件是单元内【唯一】允许 AI 修改的文件。
- * 当前为桩实现：判据是红的，交给 AI（或人）按契约填成真的。
+ * [角色] 功能单元：create-order —— 实现
+ * 演示实现：记录业务事件并返回（真实实现会写入订单端口——order-service 尚无该端口，
+ * 待 Agent-D 生成 Order 端口 + 适配器后扩展）。
  */
 
 import type { CreateOrder } from "./contract";
 
-export const createOrder: CreateOrder = async (_input, _deps) => {
-  throw new Error("NOT_IMPLEMENTED: 按 contract.ts 的不变量实现本单元");
+export const createOrder: CreateOrder = async ({ token, payload }, { logger }) => {
+  // 日志不含 token 全文（凭证纪律），只记录截断指纹与业务负载
+  logger.info("create-order.ok", { tokenFingerprint: token.slice(0, 8), hasPayload: payload !== undefined });
 };
