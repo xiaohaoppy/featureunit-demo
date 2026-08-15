@@ -16,10 +16,10 @@
 - 现有文件：index.ts / adapters/http.ts / manifest.json（照抄在【现有文件】里）
 
 【单元契约】
-{CONTRACT_CONTENT}
+{{CONTRACT_CONTENT}}
 
 【现有文件】
-{EXISTING_FILES}
+{{EXISTING_FILES}}
 
 ## 你的输出
 

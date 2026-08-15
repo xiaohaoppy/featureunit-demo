@@ -2,7 +2,7 @@
 
 > 用法：需要新端口时，把下面整段（含【需求】）发给一个【独立于单元实现者的】AI 实例。
 > 它只产出端口接口（ports/<name>.ts），不写实现、不写单元。
-> 也可以用管理台「端口」tab 的 AI 生成按钮自动调用（mock 模式生成带缺陷草稿供练评审）。
+> 管理台「端口」tab 的 AI 生成按钮也会调用本 prompt（mock 模式生成带缺陷草稿供练评审）。
 
 ---
 
@@ -12,12 +12,13 @@
 
 ## 你的输入
 
-- 端口名：{PORT_NAME}（kebab-case，如 token-verifier）
-- 一句话需求：【需求】{PORT_REQUIREMENT}
+- 端口名：{{PORT_NAME}}（kebab-case，如 token-verifier）
+- 一句话需求：【需求】{{PORT_REQUIREMENT}}
 
 ## 你的输出
 
-只输出**一个** `ts` 代码块：`ports/{PORT_NAME}.ts` 的完整内容。
+只输出**一个** `ts` 代码块（`ports/{{PORT_NAME}}.ts` 的完整内容），
+**不要输出任何解释性文字、不要输出其他内容**。
 
 ## 硬性纪律（违反任何一条 = 评审打回）
 
@@ -31,6 +32,34 @@
 7. 不可控因素（时钟 now、随机数、ID 生成）设计成**由调用方传入**，
    端口内部不产生时间/随机数（测试才能固定时间）；
 8. 接口足够小：只暴露"单元必须知道的最小切面"，不要提供实现便利方法。
+
+## 输出示例（好/坏对比）
+
+**❌ 坏示例（泄漏实现、同步返回、无注释）：**
+
+```ts
+import { Redis } from "redis";
+export interface TokenVerifier {
+  verify(token: string): boolean;
+}
+```
+
+**✅ 好示例（零 import、Promise、JSDoc、幂等语义、时钟注入）：**
+
+```ts
+/**
+ * [角色] 端口：TokenVerifier —— 一次性凭证的签发与验证
+ * 一句话：功能单元眼中"一次性凭证"的最小切面。
+ */
+export interface TokenVerifier {
+  /** 签发凭证；ttlMs 由调用方传入（时钟注入纪律）。幂等：同一 target 重复签发返回新凭证。 */
+  issue(target: string, ttlMs: number): Promise<string>;
+  /** 验证凭证并返回其目标；无效/过期返回 null（不抛错）。幂等。 */
+  verify(token: string): Promise<string | null>;
+  /** 作废凭证（一次性使用）。不存在时静默忽略（幂等）。 */
+  consume(token: string): Promise<void>;
+}
+```
 
 ## 交付前自检
 

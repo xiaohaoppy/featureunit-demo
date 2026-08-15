@@ -15,7 +15,7 @@
 - 单元名与所在服务组
 
 【契约内容】
-{CONTRACT_CONTENT}
+{{CONTRACT_CONTENT}}
 
 ## 你的输出
 

@@ -46,6 +46,7 @@ export function generatePort(
   description: string,
   mock?: boolean,
   group?: string,
+  reasoning?: string,
 ): Promise<{
   name: string;
   interfaceName: string;
@@ -74,6 +75,7 @@ export function generateWiringDraft(
   name: string,
   opts?: { mock?: boolean },
   group?: string,
+  reasoning?: string,
 ): Promise<{
   source: string;
   name: string;
@@ -125,6 +127,7 @@ export function generateJudgeTest(
   name: string,
   mock?: boolean,
   group?: string,
+  reasoning?: string,
 ): Promise<{ name: string; test: string; invariants: string[] }>;
 export function freezeJudge(
   name: string,
@@ -135,6 +138,7 @@ export function implementUnit(
   name: string,
   opts?: { mock?: boolean; maxRounds?: number },
   group?: string,
+  reasoning?: string,
 ): Promise<{
   ok: boolean;
   rounds: Array<{ round: number; ok: boolean; summary: string; tail: string }>;
@@ -179,6 +183,7 @@ export function generateDraft(
   requirement: string,
   mock?: boolean,
   group?: string,
+  reasoning?: string,
 ): Promise<{ ts: string; md: string; source: "mock" | "live" }>;
 export function machineCheck(
   name: string,

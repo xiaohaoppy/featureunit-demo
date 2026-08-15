@@ -481,7 +481,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
           pipeline.log.push(`  · 单元已存在，复用 ${group}/features/${unit}`);
         }
         if (plan.portName) {
-          const port = await generatePort(plan.portName, plan.portDescription, mock, group);
+          const port = await generatePort(plan.portName, plan.portDescription, mock, group, "medium");
+          pipeline.log.push("  · 推理等级：medium（端口设计）");
           pipeline.artifact = { port, portName: plan.portName };
           pipeline.log.push(`  · 已生成端口草稿 ${plan.portName}（待初审确认）`);
         } else {
@@ -496,7 +497,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
           const r = freezePort(plan.portName, "流水线确认", group);
           pipeline.log.push(`  · ${r.message}`);
         }
-        const draft = await generateDraft(unit, pipeline.requirement, mock, group);
+        const draft = await generateDraft(unit, pipeline.requirement, mock, group, "high");
+        pipeline.log.push("  · 推理等级：high（契约=考卷，最严谨）");
         const mc = machineCheck(unit, draft.ts, draft.md, group);
         pipeline.artifact = { draft, machine: mc };
         pipeline.log.push(`  · 已生成契约草稿（机器初审 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
@@ -507,7 +509,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         // ③ 契约确认：冻结 → 生成判据骨架
         const r = freeze(unit, { generation: mock ? "模拟 AI" : "真实 AI", reviewer: "流水线确认", approved: "10/10" }, group);
         pipeline.log.push(`  · ${r.message}`);
-        const judge = await generateJudgeTest(unit, mock, group);
+        const judge = await generateJudgeTest(unit, mock, group, "high");
+        pipeline.log.push("  · 推理等级：high（判据需覆盖全部不变量）");
         pipeline.artifact = { judge };
         pipeline.log.push(`  · 已生成判据骨架（${judge.invariants.length} 条不变量）——占位判据需人工补全断言后才能冻结`);
         pipeline.step = "judge";
@@ -517,7 +520,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         // ④ 判据确认：冻结判据（占位会被拦截）→ 交给实现器
         const r = freezeJudge(unit, "流水线确认", group);
         pipeline.log.push(`  · ${r.message}`);
-        const impl = await implementUnit(unit, { mock, maxRounds: mock ? 2 : 5 }, group);
+        const impl = await implementUnit(unit, { mock, maxRounds: mock ? 2 : 5 }, group, "medium");
+        pipeline.log.push("  · 推理等级：medium（实现迭代）");
         pipeline.artifact = { impl };
         pipeline.log.push(`  · 实现器结果：${impl.message}`);
         pipeline.step = "implement";
@@ -525,7 +529,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
       }
       case "implement": {
         // ⑤ 实现确认（含"停手求援"的人工接受）→ 打包接线
-        const wiring = await generateWiringDraft(unit, { mock }, group);
+        const wiring = await generateWiringDraft(unit, { mock }, group, "medium");
+        pipeline.log.push("  · 推理等级：medium（打包接线）");
         pipeline.artifact = { wiring };
         pipeline.log.push(`  · 打包草稿：${wiring.source}；${mock ? wiring.preflight?.summary : "结构初审"}`);
         pipeline.step = "wiring";

@@ -10,21 +10,21 @@
 
 ## 你的任务
 
-实现功能单元 **{FEATURE_NAME}**（服务组 {GROUP}）。
+实现功能单元 **{{FEATURE_NAME}}**（服务组 {{GROUP}}）。
 
 ## 文件权限
 
 - **只读**（禁止修改）：
-  - `{GROUP}/features/{FEATURE_NAME}/contract.ts` —— 契约（考卷）
-  - `{GROUP}/features/{FEATURE_NAME}/spec.md` —— 规格说明
-  - `{GROUP}/features/{FEATURE_NAME}/impl.test.ts` —— 判据（自动阅卷机）
-  - `{GROUP}/ports/**` —— 组级端口
+  - `{{GROUP}}/features/{{FEATURE_NAME}}/contract.ts` —— 契约（考卷）
+  - `{{GROUP}}/features/{{FEATURE_NAME}}/spec.md` —— 规格说明
+  - `{{GROUP}}/features/{{FEATURE_NAME}}/impl.test.ts` —— 判据（自动阅卷机）
+  - `{{GROUP}}/ports/**` —— 组级端口
 - **只写**（唯一允许修改的文件）：
-  - `{GROUP}/features/{FEATURE_NAME}/impl.ts`
+  - `{{GROUP}}/features/{{FEATURE_NAME}}/impl.ts`
 
 ## 完成判据（全部满足才算完成）
 
-1. `npx vitest run src/groups/{GROUP}/features/{FEATURE_NAME}/impl.test.ts` 全绿；
+1. `npx vitest run src/groups/{{GROUP}}/features/{{FEATURE_NAME}}/impl.test.ts` 全绿；
 2. `npx tsc --noEmit` 通过。
 
 ## 纪律（违反任何一条 = 任务失败）
@@ -36,7 +36,7 @@
 4. 错误一律抛 `AppError`（错误码见契约第 4 节），禁止抛裸 Error / 中文文案；
 5. 日志只记业务事实（见契约不变量：密码/token/PII 不进日志）；
 6. 最多迭代 5 次（跑判据 → 看失败 → 改 impl.ts）；超过仍失败 → 停止并报告失败原因；
-7. 提交信息格式：`feat({FEATURE_NAME}): implement`，diff 只含 impl.ts 一个文件。
+7. 提交信息格式：`feat({{FEATURE_NAME}}): implement`，diff 只含 impl.ts 一个文件。
 
 ## 工作循环
 

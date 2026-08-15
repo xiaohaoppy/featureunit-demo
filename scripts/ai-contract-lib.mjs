@@ -294,7 +294,7 @@ function extractInvariants(contract) {
  * - mock 模式：生成"不变量驱动的测试骨架"——每条不变量一个 it，body 显式
  *   抛 TODO（必红，杜绝 expect(true) 假绿），供人逐条补全断言。
  */
-export async function generateJudgeTest(name, mock = true, group = GROUP) {
+export async function generateJudgeTest(name, mock = true, group = GROUP, reasoning) {
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
 
@@ -327,11 +327,14 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
 `;
   } else {
     const promptText = readFileSync(join(ROOT, "docs/agent-prompts/04-judge-drafter.md"), "utf8");
-    const system = promptText.replace("{CONTRACT_CONTENT}", contract);
-    const raw = await callLLM({
-      system,
-      user: `单元名：${name}（服务组 ${group}）\n只输出一个 ts 代码块：impl.test.ts 的完整内容。`,
-    });
+    const system = promptText.replace("{{CONTRACT_CONTENT}}", contract);
+    const raw = await callLLM(
+      {
+        system,
+        user: `单元名：${name}（服务组 ${group}）\n只输出一个 ts 代码块：impl.test.ts 的完整内容。`,
+      },
+      { reasoning },
+    );
     const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
     if (!m) throw new Error(`模型输出无法解析（需要单个 ts 代码块）。原始输出片段：\n${raw.slice(0, 300)}`);
     test = m[1];
@@ -372,7 +375,7 @@ export function freezeJudge(name, reviewer = "管理台操作员", group = GROUP
  * - mock 模式：演示"迭代与失败安全"路径——每轮写一个带轮次的桩，必然红灯，
  *   演示读失败信息、重试、最终停手报告。
  */
-export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}, group = GROUP) {
+export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}, group = GROUP, reasoning) {
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
   if (isJudgePlaceholder(files.test)) {
@@ -403,10 +406,10 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
         ? `\n\n【上一轮判据失败信息，请修正】\n${rounds[rounds.length - 1].summary}\n${rounds[rounds.length - 1].tail}`
         : "";
       const system = promptText
-        .replaceAll("{FEATURE_NAME}", name)
-        .replaceAll("{GROUP}", `src/groups/${GROUP}`)
+        .replaceAll("{{FEATURE_NAME}}", name)
+        .replaceAll("{{GROUP}}", `src/groups/${GROUP}`)
         + feedback;
-      const raw = await callLLM({ system, user: `只输出一个 ts 代码块：impl.ts 的完整内容。` });
+      const raw = await callLLM({ system, user: `只输出一个 ts 代码块：impl.ts 的完整内容。` }, { reasoning });
       const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
       if (!m) throw new Error(`模型输出无法解析：\n${raw.slice(0, 300)}`);
       writeFileSync(join(unitDir(name, group), "impl.ts"), m[1]);
@@ -759,8 +762,8 @@ ${requirement}
 }
 
 /** 调用 OpenAI 兼容 API 生成契约（真实模式）。 */
-async function callLLM(prompt) {
-  // 优先级：本地配置（管理台写入）→ 环境变量 → 默认值
+async function callLLM(prompt, opts = {}) {
+  // 优先级：调用方指定等级 > 本地配置 > 环境变量 > 默认值
   const key = resolveConfigValue("AI_API_KEY");
   if (!key) {
     throw new Error("未配置 API Key：请在管理台「配置」面板填写 AI_API_KEY，或设置环境变量。演示模式请用 mock: true");
@@ -770,7 +773,7 @@ async function callLLM(prompt) {
 
   // 推理等级 → 采样参数（所有 OpenAI 兼容 API 都认 temperature；
   // high 时附 reasoning_effort，V4 系列模型可据此进入深度推理模式）
-  const reasoning = resolveConfigValue("AI_REASONING", "medium");
+  const reasoning = opts.reasoning ?? resolveConfigValue("AI_REASONING", "medium");
   const TEMPERATURE = { low: 0.7, medium: 0.3, high: 0.1 };
   const body = {
     model,
@@ -825,7 +828,7 @@ function parseBlocks(text) {
  * @param mock        演示模式（不调 API）
  * @returns {ts, md, source} 草稿内容与来源（mock | live）
  */
-export async function generateDraft(name, requirement, mock = true, group = GROUP) {
+export async function generateDraft(name, requirement, mock = true, group = GROUP, reasoning) {
   const dir = unitDir(name, group);
   if (!existsSync(join(dir, "contract.ts"))) {
     throw new Error(`功能单元不存在: ${group}/features/${name}（请先执行 feat new ${name}）`);
@@ -840,7 +843,7 @@ export async function generateDraft(name, requirement, mock = true, group = GROU
     ({ ts, md } = mockDraft(name, requirement, group));
     source = "mock";
   } else {
-    const text = await callLLM(buildPrompt(name, requirement));
+    const text = await callLLM(buildPrompt(name, requirement), { reasoning });
     ({ ts, md } = parseBlocks(text));
     if (!ts || !md) {
       throw new Error(`模型输出无法解析（需要 ts/md 两个代码块）。原始输出片段：\n${text.slice(0, 300)}`);
@@ -966,7 +969,7 @@ export function runAllTests() {
 export function buildTicketText(name, group = GROUP) {
   const prompt = readFileSync(join(ROOT, "docs/agent-prompts/03-unit-implementer.md"), "utf8");
   return prompt
-    .replaceAll("{FEATURE_NAME}", name)
+    .replaceAll("{{FEATURE_NAME}}", name)
     .replaceAll("{GROUP}", `src/groups/${group}`)
     .replaceAll("{FEATURE_PATH}", unitDir(name, group));
 }
@@ -1445,7 +1448,7 @@ export function machineCheckPort(content) {
  * - 真实模式：调 API（05-port-drafter.md 纪律）。
  * 守卫：已冻结的端口不允许被 AI 重写（冻结区纪律）。
  */
-export async function generatePort(name, description, mock = true, group = GROUP) {
+export async function generatePort(name, description, mock = true, group = GROUP, reasoning) {
   if (!/^[a-z0-9-]+$/.test(name)) throw new Error("端口名只允许小写字母、数字、连字符（kebab-case）");
   const P = pascal(name);
   const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
@@ -1475,12 +1478,12 @@ ${types ? "\n" + types : ""}
 `;
   } else {
     const promptText = readFileSync(join(ROOT, "docs/agent-prompts/05-port-drafter.md"), "utf8")
-      .replace("{PORT_NAME}", name)
-      .replace("{PORT_REQUIREMENT}", description ?? "");
+      .replace("{{PORT_NAME}}", name)
+      .replace("{{PORT_REQUIREMENT}}", description ?? "");
     const raw = await callLLM({
       system: promptText,
       user: `只输出一个 ts 代码块：ports/${name}.ts 的完整内容。`,
-    });
+    }, { reasoning });
     const m = /```(?:ts|typescript)\n([\s\S]*?)```/.exec(raw);
     if (!m) throw new Error(`模型输出无法解析（需要单个 ts 代码块）。原始输出片段：\n${raw.slice(0, 300)}`);
     content = m[1];
@@ -1566,7 +1569,7 @@ export function preflightWiring(name, group = GROUP) {
  * - 真实模式：调 API（06-composition-drafter.md），产出三段粘贴片段 + 结构初审
  *   （机器检查关键模式），人粘贴后自行跑总闸验证。
  */
-export async function generateWiringDraft(name, { mock = true } = {}, group = GROUP) {
+export async function generateWiringDraft(name, { mock = true } = {}, group = GROUP, reasoning) {
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
 
@@ -1591,12 +1594,12 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
     readSourceFile("manifest.json", group) ?? "",
   ].join("\n");
   const promptText = readFileSync(join(ROOT, "docs/agent-prompts/06-composition-drafter.md"), "utf8")
-    .replace("{CONTRACT_CONTENT}", contract)
+    .replace("{{CONTRACT_CONTENT}}", contract)
     .replace("{EXISTING_FILES}", existing);
   const raw = await callLLM({
     system: promptText,
     user: `单元名：${name}（服务组 ${group}）\n只输出三个代码块：ts(index) / ts(http) / json(manifest)。`,
-  });
+  }, { reasoning });
 
   // 结构初审：关键模式检查（真实片段无法自动应用，机器检查"该有的都有"）
   const P = pascal(name);
