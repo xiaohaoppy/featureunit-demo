@@ -15,7 +15,7 @@
  * ============================================================================
  */
 
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { z } from "zod";
 import { AppError, ErrorCodes } from "./ports/errors";
 import { consoleLogger, type Logger } from "./ports/logger";
@@ -33,6 +33,10 @@ import { MemoryEmailSender } from "./adapters/memory/memory-email-sender";
 import { FixedWindowRateLimiter } from "./adapters/memory/fixed-window-rate-limiter";
 import { FileUserStore } from "./adapters/file-user-store";
 import { ScryptPasswordHasher } from "./adapters/scrypt-password-hasher";
+import { openDb } from "./adapters/sqlite/db";
+import { SqliteUserStore } from "./adapters/sqlite/sqlite-user-store";
+import { SqliteSessionStore } from "./adapters/sqlite/sqlite-session-store";
+import { SqliteResetTokenStore } from "./adapters/sqlite/sqlite-reset-token-store";
 
 import { registerUser } from "./features/register-user/impl";
 import { login } from "./features/login/impl";
@@ -64,6 +68,9 @@ import { ResetPasswordInput } from "./features/reset-password/contract";
 
 import type { AppConfig } from "./config";
 
+/** 项目根目录（数据文件/数据库路径一律锚定项目根，不受启动 cwd 影响）。 */
+const ROOT_DIR = join(import.meta.dirname, "..", "..", "..");
+
 // ---------------------------------------------------------------------------
 // 依赖集：组合根对"外部世界"的完整清单（组装一次，供所有单元注入）
 // ---------------------------------------------------------------------------
@@ -93,14 +100,22 @@ export interface AuthDeps {
  * @param overrides 测试用覆盖（如注入 MemoryEmailSender 以便断言邮件内容）
  */
 export function buildDeps(config: AppConfig, overrides: Partial<AuthDeps> = {}): AuthDeps {
+  // SQLite：三个存储共享一个连接（真库模式；内存模式为零基础设施判据保留）
+  const sqliteDb = config.USER_STORE === "sqlite"
+    ? openDb(resolve(ROOT_DIR, config.SQLITE_PATH))
+    : null;
+
   const base: AuthDeps = {
-    // 用户存储：按配置选择内存或 JSON 文件实现（生产：替换为 Postgres 适配器）
+    // 用户存储：memory | file(JSON) | sqlite(真库)——换实现只改这一处
     users: config.USER_STORE === "file"
-      ? new FileUserStore(join(config.DATA_DIR, "users.json"))
-      : new MemoryUserStore(),
-    // 会话存储：演示用内存实现（生产：替换为 Redis 适配器，TTL 由 Redis 兜底）
-    sessions: new MemorySessionStore(),
-    resetTokens: new MemoryResetTokenStore(),
+      ? new FileUserStore(join(ROOT_DIR, config.DATA_DIR, "users.json"))
+      : sqliteDb
+        ? new SqliteUserStore(sqliteDb)
+        : new MemoryUserStore(),
+    // 会话存储：sqlite 落库（多实例生产：Redis 适配器）
+    sessions: sqliteDb ? new SqliteSessionStore(sqliteDb) : new MemorySessionStore(),
+    // 重置 token 存储：sqlite 落库
+    resetTokens: sqliteDb ? new SqliteResetTokenStore(sqliteDb) : new MemoryResetTokenStore(),
     hasher: new ScryptPasswordHasher(), // 真实 scrypt；可换 argon2/bcrypt 适配器
     mail: new MemoryEmailSender(),      // 演示：邮件打印进内存（生产：SMTP 适配器）
     rate: new FixedWindowRateLimiter(config.RATE_LIMIT_MAX, config.RATE_LIMIT_WINDOW_MS),

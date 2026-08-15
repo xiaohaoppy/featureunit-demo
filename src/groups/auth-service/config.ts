@@ -19,10 +19,12 @@ import { join } from "node:path";
 const EnvSchema = z.object({
   /** HTTP 端口。 */
   PORT: z.coerce.number().int().positive().default(3000),
-  /** 用户存储实现：memory（进程内存）| file（JSON 文件持久化）。 */
-  USER_STORE: z.enum(["memory", "file"]).default("memory"),
+  /** 用户存储实现：memory（进程内存）| file（JSON 文件）| sqlite（真库）。 */
+  USER_STORE: z.enum(["memory", "file", "sqlite"]).default("memory"),
   /** USER_STORE=file 时的数据目录。 */
   DATA_DIR: z.string().default("./data"),
+  /** USER_STORE=sqlite 时的数据库文件路径（相对项目根）。 */
+  SQLITE_PATH: z.string().default("./data/auth-service.db"),
   /** 会话有效期（天）。 */
   SESSION_TTL_DAYS: z.coerce.number().positive().default(30),
   /** 重置密码 token 有效期（分钟）。 */

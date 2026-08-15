@@ -14,14 +14,17 @@
     "check": "npm run typecheck && npm run test",
     "dev": "tsx src/groups/auth-service/dev-server.ts",
     "admin": "tsx src/groups/auth-service/admin-server.ts",
+    "migrate": "tsx scripts/migrate.ts",
     "feat": "node scripts/feat.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "better-sqlite3": "^13.0.3",
     "hono": "^4.6.14",
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
