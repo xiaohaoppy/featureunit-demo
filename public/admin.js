@@ -149,7 +149,6 @@ async function loadGroups() {
       loadSourceList();
       loadPortMatrix();
       loadPorts();
-      fillWizardSelect();
       $("group-label").textContent = `${state.group} · 切换中…`;
     });
   } catch { /* 忽略 */ }
@@ -191,7 +190,7 @@ async function loadUnits() {
     const data = await api("/admin/api/units");
     state.units = data.units;
     $("group-label").textContent = `${data.group} · ${data.units.length} 个功能单元`;
-    fillWizardSelect();
+    renderQuickGrid();
 
     const ul = $("unit-list");
     ul.innerHTML = "";
@@ -227,10 +226,30 @@ async function selectUnit(name, li) {
     state.unitFiles = data.files;
     state.unitFileTab = "contract";
     renderUnitDetail();
-    fillTicketSelect();
+    $("ai-name").value = name; // 契约生成自动带单元名
+    loadUnitWizard();
   } catch (err) {
     $("unit-title").textContent = `加载失败：${err.message}`;
   }
+}
+
+/** 单元工作台：5 步进度条 + 各阶段状态（复用向导 status API）。 */
+async function loadUnitWizard() {
+  if (!state.selectedUnit) return;
+  $("unit-wizard-card").style.display = "block";
+  try {
+    const r = await api(`/admin/api/units/${state.selectedUnit}/status`);
+    $("unit-wizard").innerHTML = r.steps.map((s, i) => {
+      const isNow = !s.done && (i === 0 || r.steps[i - 1].done);
+      return `<div class="w-step ${s.done ? "done" : isNow ? "now" : ""}">${s.done ? "✅" : isNow ? "▶️" : "⬜"} ${escapeHtml(s.label)}</div>`;
+    }).join("");
+    $("unit-wizard-hint").textContent = r.steps.map((s) => (s.done ? "" : `▶ ${s.hint}`)).filter(Boolean).join(" ｜ ") || "✅ 全部完成";
+    // 各阶段状态徽标
+    $("state-contract").textContent = r.steps[0]?.done ? "✅ 已冻结" : "待生成";
+    $("state-judge").textContent = r.steps[1]?.done ? "✅ 就绪" : "待生成";
+    $("state-impl").textContent = r.steps[2]?.done ? "✅ 完成" : "待实现";
+    $("state-wiring").textContent = r.steps[3]?.done ? "✅ 已接线" : "待接线";
+  } catch { /* 忽略 */ }
 }
 
 function renderUnitDetail() {
@@ -485,8 +504,8 @@ function setReview(i, ok) {
   row.querySelector('[data-y="0"]').className = ok === false ? "on-n" : "";
 }
 
-$("btn-ai-freeze").addEventListener("click", () =>
-  withBusy($("btn-ai-freeze"), "冻结中…", async () => {
+$("btn-ai-freeze-confirm").addEventListener("click", () =>
+  withBusy($("btn-ai-freeze-confirm"), "冻结中…", async () => {
     if (!state.aiDraft) return;
     const unanswered = state.aiReviews.filter((x) => x === null).length;
     if (unanswered > 0) return msg($("ai-freeze-msg"), `还有 ${unanswered} 项未评审`, "err");
@@ -500,17 +519,16 @@ $("btn-ai-freeze").addEventListener("click", () =>
 // Ticket / 源码浏览 / 试玩 / 向导
 // ---------------------------------------------------------------------------
 
-function fillTicketSelect() {
-  const sel = $("ticket-unit");
-  const prev = sel.value;
-  sel.innerHTML = state.units.map((u) => `<option>${u.name}</option>`).join("");
-  if (prev && state.units.some((u) => u.name === prev)) sel.value = prev;
-}
+// ---------------------------------------------------------------------------
+// Ticket（并入单元工作台）
+// ---------------------------------------------------------------------------
 
-$("btn-ticket-load").addEventListener("click", () =>
-  withBusy($("btn-ticket-load"), "加载中…", async () => {
-    const r = await api(`/admin/api/ticket/${$("ticket-unit").value}`);
+$("btn-ticket").addEventListener("click", () =>
+  withBusy($("btn-ticket"), "生成中…", async () => {
+    if (!state.selectedUnit) return;
+    const r = await api(`/admin/api/ticket/${state.selectedUnit}`);
     $("ticket-content").textContent = r.ticket;
+    $("ticket-result").style.display = "block";
   }));
 
 $("btn-ticket-copy").addEventListener("click", async () => {
@@ -589,21 +607,30 @@ $("btn-play-clear").addEventListener("click", () => {
   $("play-cookie").textContent = "会话 cookie：无";
 });
 
-function fillWizardSelect() {
-  const sel = $("wizard-unit");
-  const prev = sel.value;
-  sel.innerHTML = state.units.map((u) => `<option>${u.name}</option>`).join("");
-  if (prev && state.units.some((u) => u.name === prev)) sel.value = prev;
-  else if (state.units.length) sel.value = state.units[0].name;
+/** 快速入口卡片（开始页）：一键跳转到对应 tab。 */
+function renderQuickGrid() {
+  const cards = [
+    { icon: "📦", title: "继续开发", desc: `选择左侧单元，在「单元」页按 4 阶段推进（共 ${state.units.length} 个单元）`, goto: "unit" },
+    { icon: "🔌", title: "管理端口", desc: "端口清单 / AI 生成（Agent-D）/ 冻结", goto: "ports" },
+    { icon: "🧪", title: "试玩冒烟", desc: "注册/登录/查我，验证业务", goto: "play" },
+    { icon: "⚙️", title: "配置", desc: "存储模式（memory/file/sqlite）/ AI 密钥", goto: "config" },
+  ];
+  $("quick-grid").innerHTML = cards.map((c) => `
+    <div class="unit-card" data-goto="${c.goto}">
+      <h4>${c.icon} ${c.title}</h4>
+      <div class="hint" style="margin:6px 0">${escapeHtml(c.desc)}</div>
+      <div class="meta">点击进入 →</div>
+    </div>`).join("");
+  $("quick-grid").querySelectorAll("[data-goto]").forEach((card) => {
+    card.addEventListener("click", () => {
+      document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+      const btn = document.querySelector(`.tabs button[data-tab="${card.dataset.goto}"]`);
+      btn.classList.add("active");
+      $("panel-" + card.dataset.goto).classList.add("active");
+    });
+  });
 }
-
-$("btn-wizard-load").addEventListener("click", () =>
-  withBusy($("btn-wizard-load"), "加载中…", async () => {
-    const r = await api(`/admin/api/units/${$("wizard-unit").value}/status`);
-    panel($("wizard-body"), `
-      <div class="msg ${r.stepsDone === r.stepsTotal ? "ok" : "warn"}">进度 ${r.stepsDone}/${r.stepsTotal}${r.stepsDone === r.stepsTotal ? " ✅ 可上线" : ""}</div>
-      ${r.steps.map((s, i) => `<div class="review-item"><span class="idx">${String(i + 1).padStart(2)}/5</span><span class="text">${s.done ? "✅" : "⬜"} ${escapeHtml(s.label)} — <span class="hint">${escapeHtml(s.hint)}</span></span></div>`).join("")}`);
-  }));
 
 // ---------------------------------------------------------------------------
 // 端口：清单 / 详情 / 编辑 / AI 生成 / 冻结
@@ -868,7 +895,6 @@ $("btn-refresh").addEventListener("click", () => {
 });
 
 fillPlayOps();
-fillWizardSelect();
 loadGroups();
 loadUnits();
 loadSourceList();
