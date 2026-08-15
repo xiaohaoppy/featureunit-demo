@@ -391,10 +391,10 @@ app.post("/admin/api/ai/freeze", async (c) => {
 // 配置管理（含密钥：默认打码；写入 .featureunit.local.json，不进 git）
 // ---------------------------------------------------------------------------
 
-/** 配置面板视图：每个 key 的当前生效值 + 来源（本地文件/环境变量/默认值）。 */
+/** 配置面板视图：每个 key 的当前生效值 + 来源（本地文件/环境变量/默认值）+ 可选选项。 */
 function configView() {
   const local = readLocalConfig();
-  const values = CONFIG_KEYS.map(({ key, label, secret, fallback }) => {
+  const values = CONFIG_KEYS.map(({ key, label, secret, fallback, options }) => {
     const fromLocal = key in local;
     const fromEnv = process.env[key] !== undefined && process.env[key] !== "";
     const value = resolveConfigValue(key, fallback);
@@ -402,6 +402,7 @@ function configView() {
       key,
       label,
       secret,
+      options,
       value: secret && value ? maskSecret(value) : value,
       hasValue: value !== "",
       source: fromLocal ? "本地配置文件" : fromEnv ? "环境变量" : "默认值",

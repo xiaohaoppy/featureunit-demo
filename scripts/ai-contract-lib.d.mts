@@ -14,6 +14,7 @@ export const CONFIG_KEYS: Array<{
   label: string;
   secret: boolean;
   fallback: string;
+  options?: string[];
 }>;
 
 export function unitDir(name: string, group?: string): string;

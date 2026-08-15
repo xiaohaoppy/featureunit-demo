@@ -624,13 +624,29 @@ async function loadConfigPanel() {
         <div style="flex:1">
           <div style="font-weight:600">${escapeHtml(item.label)} <code style="color:var(--muted)">${item.key}</code></div>
           <div class="hint">来源：${item.source}${item.secret && item.hasValue ? " · 密钥已打码" : ""}</div>
-        </div>
-        <input type="text" style="flex:1.2;font-family:var(--mono)" placeholder="${item.secret ? "留空 = 删除该密钥" : "默认值：" + escapeHtml(item.fallback)}" />`;
-      const input = row.querySelector("input");
-      // 密钥不回填明文：只显示占位提示；非密钥回填当前值
-      if (!item.secret && item.hasValue) input.value = item.value;
-      if (item.secret) input.placeholder = item.hasValue ? "已配置（保存时留空 = 删除）" : "未配置（粘贴密钥）";
-      configInputs[item.key] = input;
+        </div>`;
+
+      // 有固定选项的配置项（如存储模式）渲染为下拉选择；其余为文本框
+      let control;
+      if (Array.isArray(item.options) && item.options.length) {
+        const sel = document.createElement("select");
+        sel.style.cssText = "flex:1.2;font-family:var(--mono)";
+        sel.innerHTML = item.options
+          .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}${o === item.fallback ? "（默认）" : ""}</option>`)
+          .join("");
+        if (item.hasValue && item.options.includes(item.value)) sel.value = item.value;
+        control = sel;
+      } else {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.style.cssText = "flex:1.2;font-family:var(--mono)";
+        input.placeholder = item.secret ? "留空 = 删除该密钥" : `默认值：${item.fallback}`;
+        if (!item.secret && item.hasValue) input.value = item.value;
+        if (item.secret) input.placeholder = item.hasValue ? "已配置（保存时留空 = 删除）" : "未配置（粘贴密钥）";
+        control = input;
+      }
+      row.appendChild(control);
+      configInputs[item.key] = control;
       list.appendChild(row);
     }
   } catch (err) {

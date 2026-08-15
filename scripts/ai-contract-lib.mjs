@@ -74,7 +74,7 @@ export const CONFIG_KEYS = [
   { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
   { key: "AI_MODEL", label: "AI 模型名", secret: false, fallback: "deepseek-chat" },
   { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
-  { key: "USER_STORE", label: "存储模式（memory=内存 / file=JSON / sqlite=真库）", secret: false, fallback: "memory" },
+  { key: "USER_STORE", label: "存储模式", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
   { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/auth-service.db" },
   { key: "DATA_DIR", label: "JSON 文件存储目录（file 模式）", secret: false, fallback: "./data" },
   { key: "SESSION_TTL_DAYS", label: "会话有效期（天）", secret: false, fallback: "30" },
