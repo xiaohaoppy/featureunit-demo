@@ -1305,12 +1305,58 @@ export interface ${P} {
 // ---------------------------------------------------------------------------
 
 /**
+ * 检查 interface 内每个方法是否都紧邻 JSDoc 语义注释（以斜杠双星号开头的块注释）。
+ * 返回违规的方法名列表（空 = 全部合规）。
+ */
+function methodsWithoutDocs(content) {
+  const iface = /export\s+interface\s+\w+\s*\{([\s\S]*?)\n\}/.exec(content ?? "")?.[1] ?? "";
+  const lines = iface.split("\n");
+  const bad = [];
+  let inDoc = false;
+  for (const line of lines) {
+    if (/\/\*\*/.test(line)) inDoc = true;
+    if (inDoc && /\*\//.test(line)) inDoc = false;
+    const m = /^\s*(\w+)\(/.exec(line); // 方法签名行
+    if (m && !inDoc) bad.push(m[1]);    // 方法出现在 JSDoc 之外 = 没有文档
+  }
+  return bad;
+}
+
+/**
+ * 从端口描述提取语义，建议贴合的方法骨架（mock 模式用）。
+ * 关键词 → 方法模板；默认给 CRUD 骨架。返回 [{ sig, doc }]。
+ */
+function suggestMethods(description) {
+  const d = description ?? "";
+  if (/验证|凭证|token|令牌|验证码|一次性|verify|code/i.test(d)) {
+    return [
+      { sig: "issue(target: string, ttlMs: number): Promise<string>", doc: "签发一次性凭证（ttlMs 由调用方传入——时钟纪律）" },
+      { sig: "verify(token: string): Promise<string | null>", doc: "验证凭证并返回目标；无效/过期返回 null（幂等）" },
+      { sig: "consume(token: string): Promise<void>", doc: "作废凭证（一次性使用；不存在静默忽略）" },
+    ];
+  }
+  if (/订单|order|交易|trade/i.test(d)) {
+    return [
+      { sig: "findById(id: string): Promise<OrderRecord | null>", doc: "按 id 查订单；不存在返回 null（幂等）" },
+      { sig: "create(order: OrderRecord): Promise<void>", doc: "创建订单（id 冲突覆盖）" },
+      { sig: "updateStatus(id: string, status: OrderStatus): Promise<void>", doc: "更新状态（id 不存在静默忽略）" },
+    ];
+  }
+  return [
+    { sig: "findById(id: string): Promise<Xxx | null>", doc: "按 id 查找；不存在返回 null（幂等）" },
+    { sig: "save(record: Xxx): Promise<void>", doc: "保存（冲突覆盖）" },
+    { sig: "delete(id: string): Promise<void>", doc: "删除（不存在静默忽略）" },
+  ];
+}
+
+/**
  * 端口机器初审（纪律检查）：
  *  - 纯接口（有 export interface，无 class）；
  *  - 零基础设施 import（端口接口不得依赖任何外部包）；
- *  - 有一句话用途；方法均为 Promise 返回。
+ *  - 有一句话用途；方法均为 Promise 返回；每个方法带 JSDoc。
  */
 export function machineCheckPort(content) {
+  const bad = methodsWithoutDocs(content);
   const checks = [
     { label: "结构：包含 export interface", ok: /export\s+interface\s+\w+/.test(content) },
     { label: "纪律：无实现代码（无 class / 无方法体）", ok: !/class\s+\w+/.test(content) && !/=>\s*\{/.test(content) && !/\)\s*\{[\s\S]*\}/.test(content) },
@@ -1318,6 +1364,7 @@ export function machineCheckPort(content) {
     { label: "纪律：无基础设施字样（pg/redis/express/knex…）", ok: !/\b(pg|redis|express|knex|prisma|mongoose|mysql)\b/i.test(content) },
     { label: "结构：有一句话用途", ok: /一句话[:：]/.test(content) },
     { label: "惯例：方法返回 Promise", ok: !/:\s*(string|number|boolean|void|Date)(\s|;|\n|$)/.test(content.replace(/\/\*[\s\S]*?\*\//g, "")) },
+    { label: `纪律：每个方法都有 JSDoc 语义注释${bad.length ? `（缺: ${bad.join(", ")}）` : ""}`, ok: bad.length === 0 },
   ];
   return { checks, ok: checks.every((c) => c.ok) };
 }
@@ -1339,8 +1386,9 @@ export async function generatePort(name, description, mock = true, group = GROUP
 
   let content;
   if (mock) {
-    // 典型缺陷草稿：① import redis（泄漏实现）② 同步返回（外部世界是异步的）
-    // ③ 无幂等/失败约定注释 ④ 无"时钟由调用方注入"设计
+    // "坏学生"草稿：语义贴合描述（suggestMethods），但保留两个纪律缺陷供评审抓：
+    // ① import redis（泄漏实现细节）② 方法缺失 JSDoc（新增检查项）
+    const methods = suggestMethods(description);
     content = `/**
  * [角色] 端口：${P} —— 草稿 v0.1（模拟 AI 生成，未冻结）
  * 一句话：${description ?? "（待补用途说明）"}
@@ -1350,9 +1398,7 @@ export async function generatePort(name, description, mock = true, group = GROUP
 import { Redis } from "redis";
 
 export interface ${P} {
-  // ⚠️ 缺陷：同步返回——外部世界是异步的，应为 Promise<T>
-  verify(token: string): boolean;
-  // ⚠️ 缺陷：无幂等/失败约定注释；过期判定交给谁？应由调用方注入时钟
+${methods.map((m) => `  // ⚠️ 缺陷：方法缺少 JSDoc 语义注释（应有：${m.doc}）\n  ${m.sig};`).join("\n")}
 }
 `;
   } else {
