@@ -828,9 +828,11 @@ export async function generateDraft(name, requirement, mock = true, group = GROU
  * @returns {checks: [{label, ok}], tsc: {ok, unitErrors: string[]}}
  */
 export function machineCheck(name, ts, md, group = GROUP) {
+  // 统计契约注释里的编号不变量条目（"1. " 形式）——真实 AI 按编号写，mock 只有 1 条
+  const invariantCount = [...(ts ?? "").matchAll(/^\s*\*\s*\d+\.\s/gm)].length;
   const checks = [
     { label: "结构：包含 z.object 输入 schema", ok: ts.includes("z.object") },
-    { label: "结构：不变量注释 ≥ 3 条", ok: (ts.match(/不变量/g) ?? []).length >= 3 },
+    { label: `结构：不变量注释 ≥ 3 条（实际 ${invariantCount} 条）`, ok: invariantCount >= 3 },
     { label: "结构：spec 含错误码与不变量章节", ok: md.includes("## 4. 错误码") && md.includes("## 6. 不变量") },
   ];
 
@@ -1312,12 +1314,14 @@ function methodsWithoutDocs(content) {
   const iface = /export\s+interface\s+\w+\s*\{([\s\S]*?)\n\}/.exec(content ?? "")?.[1] ?? "";
   const lines = iface.split("\n");
   const bad = [];
-  let inDoc = false;
-  for (const line of lines) {
-    if (/\/\*\*/.test(line)) inDoc = true;
-    if (inDoc && /\*\//.test(line)) inDoc = false;
-    const m = /^\s*(\w+)\(/.exec(line); // 方法签名行
-    if (m && !inDoc) bad.push(m[1]);    // 方法出现在 JSDoc 之外 = 没有文档
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^\s*(\w+)\(/.exec(lines[i]); // 方法签名行
+    if (!m) continue;
+    // 判断方法是否有文档：向上找最近的非空行，必须是 JSDoc 块（*/ 结尾或单行 /** */）
+    let j = i - 1;
+    while (j >= 0 && lines[j].trim() === "") j--;
+    const prev = lines[j] ?? "";
+    if (!prev.includes("*/") && !prev.includes("/**")) bad.push(m[1]);
   }
   return bad;
 }
