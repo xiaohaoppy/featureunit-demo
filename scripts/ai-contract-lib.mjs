@@ -670,7 +670,7 @@ export function checkWiring(name, group = GROUP) {
 /** 列出全部服务组（src/groups/ 下有 features 目录的组）。 */
 export function listGroups() {
   return readdirSync(GROUPS_DIR, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && existsSync(join(GROUPS_DIR, d.name, "features")))
+    .filter((d) => d.isDirectory() && existsSync(join(GROUPS_DIR, d.name, "index.ts")))
     .map((d) => d.name)
     .sort();
 }
