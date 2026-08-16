@@ -1,17 +1,10 @@
 /**
- * 定稿记录（机器生成，勿手改）：
- *   - 生成方式: 模拟 AI
- *   - 评审人: 流水线确认（人，2026-08-16）
- *   - 评审结果: 10/10 项通过
- *   - 定稿后任何修改必须走功能规格演进流程
- */
-/**
  * [角色] 功能单元：record-stock-movement —— 功能规格（人补全 v1）
  */
 
 import { z } from "zod";
 import type { Logger } from "../../ports/logger";
-import type { KVStore } from "../../../adapters/storage";
+import type { KVStore } from "../../adapters/storage";
 
 export const RecordStockMovementInput = z.object({
   /** 商品 SKU */
@@ -28,6 +21,8 @@ export interface RecordStockMovementDeps {
   logger: Logger;
   /** 数据存储：变动记录持久化（组合根绑定 kv，USER_STORE 可切换） */
   kv: KVStore;
+  /** 时钟注入（测试可固定时间） */
+  now: () => Date;
 }
 
 export interface RecordStockMovement {
