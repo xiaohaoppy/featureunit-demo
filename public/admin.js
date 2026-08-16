@@ -825,71 +825,109 @@ function goto(tab) {
   $("panel-" + tab).classList.add("active");
 }
 
+/**
+ * 分步教学引导（onboarding）：安装后一次教一步（6 步），
+ * 每步：说明 + 操作跳转 + 上一步/下一步；AI 配置完成自动标记。
+ */
 async function renderOnboarding() {
   const box = $("onboarding");
   if (!box) return;
-  const done = localStorage.getItem("fu-onboarded") === "1";
+  const finished = localStorage.getItem("fu-tutorial") === "done";
 
-  // 配置状态：AI 是否就绪
+  // AI 是否就绪（第 2 步完成检查）
   let aiReady = false;
   try {
     const cfg = await api("/admin/api/config");
     aiReady = cfg.values.find((v) => v.key === "AI_API_KEY")?.hasValue ?? false;
   } catch { /* 忽略 */ }
 
-  if (done && aiReady) {
+  if (finished && aiReady) {
     box.innerHTML = "";
     return;
   }
 
-  const steps = [
-    { icon: "⚙️", title: "配置 AI", desc: "填入 API Key，选好模型与推理等级（没有 Key 可用演示模式）", done: aiReady, goto: "config" },
-    { icon: "🗣️", title: "说一句话", desc: "在下方输入框描述你的第一个功能，系统自动规划并逐步生成", done: false, goto: null },
-    { icon: "📦", title: "认识开发工作台", desc: "每个功能按 4 阶段推进：契约 → 判据 → 实现 → 接线", done: false, goto: "unit" },
-    { icon: "🧪", title: "试试业务", desc: "用内置试玩验证：注册 / 登录 / 查我", done: false, goto: "play" },
+  // 当前步骤（默认 1；已配置 AI 则从第 2 步开始）
+  let step = parseInt(localStorage.getItem("fu-tutorial-step") ?? "1", 10);
+  if (step === 1 && aiReady) step = 2;
+  if (step > 6) step = 6;
+
+  const STEPS = [
+    {
+      icon: "👋", title: "欢迎使用 FeatureUnit",
+      body: "这是一个<b>让 AI 放心写代码</b>的框架：<br>你只说一句话 → 系统自动规划（服务组/数据接口/功能）→ 逐步 AI 生成 → <b>机器判据把关</b> → <b>你确认</b>（每步都进 git，可追溯）。",
+      action: null,
+    },
+    {
+      icon: "⚙️", title: "第 1 步：配置 AI",
+      body: aiReady
+        ? "✅ AI 已配置。<br>模型列表是<b>自动获取</b>的（保存时从 API 拉取）；推理等级：low=快省 / medium=平衡 / high=深度推理。"
+        : "填入 API Key（打码保存，不进 git）、选模型与推理等级。<br>没有 Key 也可以——用<b>演示模式（mock）</b>走完全相同的流程。",
+      goto: "config", gotoText: "去配置 →", done: aiReady,
+    },
+    {
+      icon: "🗣️", title: "第 2 步：说一句话，创建第一个功能",
+      body: "在<b>下方输入框</b>描述需求（如：支持用户收藏商品）→ 「开始自动开发」。<br>系统会走 7 步流水线：规划 → 数据接口 → 契约 → 判据 → 实现 → 打包 → 完成，<b>每步你确认或打回</b>。",
+      action: "start", actionText: "去输入 →",
+    },
+    {
+      icon: "📦", title: "第 3 步：认识开发工作台",
+      body: "每个功能按 <b>4 阶段</b>推进：<br>① 契约（AI 生成 + 10 项评审 + 冻结）② 判据（AI 生成 + 补全断言 + 冻结）③ 实现（AI 自动迭代，判据全绿才提交）④ 接线与工具（AI 打包 + tsc 预演 + 回滚/错误码检查）。<br>顶部进度条显示走到哪一步。",
+      goto: "unit", gotoText: "去看工作台 →",
+    },
+    {
+      icon: "🧪", title: "第 4 步：试试业务",
+      body: "用<b>内置试玩</b>验证你创建的功能（注册/登录/查我…），cookie 自动流转，无需另起服务。<br>还没有业务路由时会提示你：先回「开始」页创建第一个功能。",
+      goto: "play", gotoText: "去试玩 →",
+    },
+    {
+      icon: "🎉", title: "完成！接下来呢？",
+      body: "你已经学会核心循环：<b>说一句话 → 逐步生成 → 逐步确认</b>。<br>更深入的用法见 docs/：使用手册（USAGE）、教程（TUTORIAL）、指南（GUIDE）。",
+      action: null,
+    },
   ];
 
+  const s = STEPS[step - 1];
   box.innerHTML = `
     <div class="card" style="border-color:var(--accent); background:linear-gradient(180deg,#fff,var(--accent-weak))">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div class="logo" style="width:40px;height:40px;font-size:18px">FU</div>
-        <div>
-          <h2 style="margin:0">👋 欢迎使用 FeatureUnit</h2>
-          <div class="hint">${aiReady ? "AI 已就绪，按下面 3 步开始你的第一个功能" : "还差一步配置：先填 AI 密钥（没有可用演示模式）"}</div>
+        <div style="flex:1">
+          <h2 style="margin:0">${s.icon} ${escapeHtml(s.title)}</h2>
+          <div class="hint">${step} / ${STEPS.length} 步</div>
         </div>
+        <button class="btn ghost" id="btn-tut-close" title="关闭引导">✕</button>
       </div>
-      <div class="check-list">
-        ${steps.map((s, i) => `
-          <div class="review-item">
-            <span class="idx">${i + 1}</span>
-            <span class="text">
-              <b>${s.icon} ${escapeHtml(s.title)}</b>
-              <div class="hint">${escapeHtml(s.desc)}</div>
-            </span>
-            <span class="badge ${s.done ? "ok" : "warn"}">${s.done ? "✅ 已完成" : "待做"}</span>
-            ${s.goto ? `<button class="btn ghost" data-goto="${s.goto}">去完成 →</button>` : `<button class="btn ghost" data-goto="start" data-focus="pipe-req">去输入 →</button>`}
-          </div>`).join("")}
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn" id="btn-onboard-done">✅ 我已了解，开始使用</button>
-        <button class="btn ghost" id="btn-onboard-skip">跳过引导</button>
-        <span class="hint">引导可随时在「开始」页重新打开</span>
+      <div class="msg warn" style="margin:8px 0 12px">${s.body}</div>
+      <div class="row">
+        <button class="btn ghost" id="btn-tut-prev" ${step === 1 ? "disabled" : ""}>← 上一步</button>
+        ${s.goto ? `<button class="btn" id="btn-tut-goto">${s.gotoText ?? "去完成 →"}</button>` : ""}
+        ${s.action === "start" ? `<button class="btn" id="btn-tut-goto" data-focus="pipe-req">去输入 →</button>` : ""}
+        <button class="btn" id="btn-tut-next">${step === STEPS.length ? "🎉 开始使用" : "下一步 →"}</button>
       </div>
     </div>`;
 
-  // 引导按钮
-  box.querySelectorAll("[data-goto]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      goto(btn.dataset.goto);
-      if (btn.dataset.focus) $("pipe-req")?.focus();
-    });
-  });
-  const finish = () => {
-    localStorage.setItem("fu-onboarded", "1");
-    renderOnboarding();
+  // 操作
+  const close = () => {
+    localStorage.setItem("fu-tutorial", "done");
+    box.innerHTML = "";
   };
-  $("btn-onboard-done")?.addEventListener("click", finish);
-  $("btn-onboard-skip")?.addEventListener("click", finish);
+  $("btn-tut-close")?.addEventListener("click", close);
+  $("btn-tut-prev")?.addEventListener("click", () => {
+    localStorage.setItem("fu-tutorial-step", String(Math.max(1, step - 1)));
+    renderOnboarding();
+  });
+  $("btn-tut-next")?.addEventListener("click", () => {
+    if (step >= STEPS.length) return close();
+    localStorage.setItem("fu-tutorial-step", String(step + 1));
+    renderOnboarding();
+  });
+  $("btn-tut-goto")?.addEventListener("click", () => {
+    if (s.goto) goto(s.goto);
+    if (s.action === "start") {
+      goto("start");
+      $("pipe-req")?.focus();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
