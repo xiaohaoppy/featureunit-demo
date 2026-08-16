@@ -643,7 +643,7 @@ export function applyWiring(name, note = "", group = GROUP) {
 }
 
 /**
- * 检查新单元是否已"接入"进服务：组合根 import / AuthApi / createAuthApp /
+ * 检查新单元是否已"接入"进服务：组合根 import / GroupApi / createApp /
  * HTTP 路由 / manifest 版本。机器检查、人动手——组合根仍由人编辑。
  */
 export function checkWiring(name, group = GROUP) {
@@ -655,8 +655,8 @@ export function checkWiring(name, group = GROUP) {
   const checks = [
     { label: `index.ts 已 import 实现 (features/${name}/impl)`, ok: index.includes(`features/${name}/impl`) },
     { label: `index.ts 已 import 功能规格 (features/${name}/contract)`, ok: index.includes(`features/${name}/contract`) },
-    { label: "AuthApi 已声明操作方法", ok: index.includes(`${c}(input: unknown)`) || index.includes(`${c}: (`) },
-    { label: "createAuthApp 已接入（parseOrThrow + 注入）", ok: index.includes(`${c}: (input) => ${c}(`) },
+    { label: "GroupApi 已声明操作方法", ok: index.includes(`${c}(input: unknown)`) || index.includes(`${c}: (`) },
+    { label: "createApp 已接入（parseOrThrow + 注入）", ok: index.includes(`${c}: (input) => ${c}(`) },
     { label: "HTTP 路由已添加（adapters/http.ts）", ok: http.includes(`/api/${name}`) },
     { label: "manifest.json 已登记版本", ok: manifest.includes(`"${name}"`) },
   ];
@@ -1110,7 +1110,7 @@ const NEW_GROUP_INDEX = (name) => `/**
  * [角色] 组合根：${name} —— 骨架（人维护，AI 禁止触碰）
  * ----------------------------------------------------------------------------
  * 新组从空 API 开始。接入第一个功能单元时：
- *   1. 参照 auth-service/index.ts 的接入模式（import → AuthApi → createApp → toXDeps）；
+ *   1. 参照 auth-service/index.ts 的接入模式（import → GroupApi → createApp → toXDeps）；
  *   2. 管理台「一键接入」的锚点目前面向 auth-service——新组第一个单元请人工接入，
  *      之后可扩展锚点支持多组；
  *   3. 接入完跑总闸（npm run check）确认。
@@ -1597,12 +1597,12 @@ export function savePortFile(name, content, note = "", group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// 接入（Agent-E）：AI 辅助生成组合根接入 → 机器预演(tsc) → 人粘贴/确认
+// 接入（Agent-E）：AI 辅助生成组合根接入 → 编译预检(tsc) → 人粘贴/确认
 // ---------------------------------------------------------------------------
 
 /**
- * 接入预演（mock 模式用）：把规则生成的接入写入文件 → 跑 tsc → 自动还原。
- * 机器验收测试：可编译才允许人确认；还原保证仓库不被预演污染。
+ * 编译预检（mock 模式用）：把规则生成的接入写入文件 → 跑 tsc → 自动还原。
+ * 机器验收测试：可编译才允许人确认；还原保证仓库不被预检污染。
  * @returns { ok, files, summary }——ok = tsc 通过
  */
 export function preflightWiring(name, group = GROUP) {
@@ -1622,15 +1622,15 @@ export function preflightWiring(name, group = GROUP) {
     alreadyWired: false,
     files,
     summary: tsc.status === 0
-      ? `✅ 预演通过：接入可编译（${files.length} 个文件，tsc 全项目 0 错误）`
-      : `❌ 预演失败：接入后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
+      ? `✅ 编译预检通过：接入可编译（${files.length} 个文件，tsc 全项目 0 错误）`
+      : `❌ 编译预检失败：接入后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
     detail: out.slice(0, 4000),
   };
 }
 
 /**
  * 接入助手（Agent-E）：生成接入草稿。
- * - mock 模式：规则生成（generateWiring）+ tsc 预演（机器验收测试，自动还原）；
+ * - mock 模式：规则生成（generateWiring）+ 编译预检（机器验收测试，自动还原）；
  * - 真实模式：调 API（06-composition-drafter.md），产出三段粘贴片段 + 结构初审
  *   （机器检查关键模式），人粘贴后自行跑总闸验证。
  */
@@ -1641,7 +1641,7 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
   if (mock) {
     const preflight = preflightWiring(name, group);
     return {
-      source: "mock（规则生成 + tsc 预演）",
+      source: "mock（规则生成 + 编译预检）",
       name,
       preflight,
       files: preflight.files.map((f) => ({ path: f.path, diffText: f.diffText })),
@@ -1688,7 +1688,7 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
  * 真实模式可让 AI 解析——本函数即"需求解析器"的最小实现）。
  *
  * 规则设计：新业务域（订单/库存/地址/收藏…）→ 新服务组 + 新数据接口 + 新单元；
- * 已有域（认证/登录/邮箱…）→ 复用 auth-service 与现有数据接口。
+ * 已有域（认证/登录/邮箱…）→ 复用 auth-service（空框架组：功能随需求新建，无既有数据接口可复用）。
  */
 export function analyzeRequirement(requirement, group = GROUP) {
   const d = requirement ?? "";
@@ -1709,7 +1709,8 @@ export function analyzeRequirement(requirement, group = GROUP) {
   else if (/地址/.test(d)) unitName = "manage-address";
   else if (/库存/.test(d)) unitName = "record-stock-movement";
   else if (/订单/.test(d)) unitName = "create-order";
-  else if (/登录|认证|会话|token/i.test(d)) unitName = "verify-session";
+  else if (/登录|认证|账号/i.test(d)) unitName = "login";
+  else if (/会话|token/i.test(d)) unitName = "verify-session";
 
   // ── 数据接口（该域的外部能力切面）──
   let portName = null;

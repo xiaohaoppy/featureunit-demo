@@ -225,7 +225,7 @@ app.post("/admin/api/units/:name/wiring/apply", async (c) => {
   }
 });
 
-/** AI 打包助手（Agent-E）：body = { mock }。mock=规则+tsc预演；真实=AI 片段+结构初审。 */
+/** AI 接入助手（AI 助手-E）：body = { mock }。mock=规则+编译预检；真实=AI 片段+结构自动检查。 */
 app.post("/admin/api/units/:name/wiring/ai", async (c) => {
   const name = c.req.param("name");
   const group = groupOf(c);
@@ -484,7 +484,7 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
           const port = await generatePort(plan.portName, plan.portDescription, mock, group, "medium");
           pipeline.log.push("  · 推理等级：medium（端口设计）");
           pipeline.artifact = { port, portName: plan.portName };
-          pipeline.log.push(`  · 已生成数据接口草稿 ${plan.portName}（待初审确认）`);
+          pipeline.log.push(`  · 已生成数据接口草稿 ${plan.portName}（自动检查后待确认）`);
         } else {
           pipeline.artifact = { port: null, note: "复用现有端口" };
         }
@@ -501,7 +501,7 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         pipeline.log.push("  · 推理等级：high（功能规格=考卷，最严谨）");
         const mc = machineCheck(unit, draft.ts, draft.md, group);
         pipeline.artifact = { draft, machine: mc };
-        pipeline.log.push(`  · 已生成功能规格草稿（机器初审 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
+        pipeline.log.push(`  · 已生成功能规格草稿（自动检查 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
         pipeline.step = "contract";
         break;
       }
@@ -532,7 +532,7 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         const wiring = await generateWiringDraft(unit, { mock }, group, "medium");
         pipeline.log.push("  · 推理等级：medium（自动接入）");
         pipeline.artifact = { wiring };
-        pipeline.log.push(`  · 打包草稿：${wiring.source}；${mock ? wiring.preflight?.summary : "结构初审"}`);
+        pipeline.log.push(`  · 接入草稿：${wiring.source}；${mock ? wiring.preflight?.summary : "结构自动检查"}`);
         pipeline.step = "wiring";
         break;
       }
@@ -540,8 +540,8 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         // ⑥ 接线确认：机器判据先行——预演失败（tsc 有错）禁止确认落盘
         const wiringArt = pipeline.artifact as { wiring?: { preflight?: { ok: boolean; summary: string } } } | undefined;
         if (wiringArt?.wiring?.preflight && !wiringArt.wiring.preflight.ok) {
-          pipeline.log.push("✗ 打包预演失败——禁止确认落盘（机器判据拦截），请人工检查或打回");
-          return c.json({ ...pipeline, error: `打包预演失败（tsc 有错）：${wiringArt.wiring.preflight.summary}` }, 400);
+          pipeline.log.push("✗ 编译预检失败——禁止确认落盘（机器判据拦截），请人工检查或打回");
+          return c.json({ ...pipeline, error: `编译预检失败（tsc 有错）：${wiringArt.wiring.preflight.summary}` }, 400);
         }
         const r = applyWiring(unit, "流水线确认", group);
         pipeline.log.push(`  · ${r.message}`);
@@ -575,7 +575,7 @@ app.post("/admin/api/tests/all", async (c) => {
 
 /**
  * 生成契约草稿：body = { name, requirement, mock }
- * 返回：{ ts, md, source, checks, tsc } —— 草稿 + 机器初审结果
+ * 返回：{ ts, md, source, checks, tsc } —— 草稿 + 自动检查结果
  */
 app.post("/admin/api/ai/generate", async (c) => {
   const body = await c.req.json().catch(() => ({}));
@@ -707,7 +707,7 @@ app.put("/admin/api/config", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// 试玩（业务冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）
+// 试玩（业务冒烟：空框架为健康检查；功能接入后前端补充对应操作）
 // ---------------------------------------------------------------------------
 
 /**

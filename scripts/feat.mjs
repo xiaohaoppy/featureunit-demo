@@ -152,7 +152,7 @@ switch (cmd) {
     break;
   }
   case "ai-contract": {
-    if (!arg1) usage("feat ai-contract 需要功能名，例如: feat ai-contract delete-account \"登录用户可以删除自己的账号\" --mock");
+    if (!arg1) usage("feat ai-contract 需要功能名，例如: feat ai-contract delete-order \"用户可以删除自己的订单\" --mock");
     // 委托给独立脚本（它有自己的评审交互与冻结流程）
     const r = spawnSync("node", [join(ROOT, "scripts/ai-contract.mjs"), arg1, ...rest], { stdio: "inherit", cwd: ROOT });
     process.exit(r.status ?? 1);

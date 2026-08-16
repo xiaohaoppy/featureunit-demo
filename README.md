@@ -21,7 +21,7 @@
   ↓
 系统：自动规划（业务系统/数据接口/功能）→ 逐步 AI 生成
   ↓ 每步
-机器验收测试（初审 / 红灯考卷 / 编译预检）→ 人确认 → 定稿（git 留痕）
+机器验收测试（自动检查 / 红灯考卷 / 编译预检）→ 人确认 → 定稿（git 留痕）
 ```
 
 | 概念 | 是什么 | 解决什么问题 |
@@ -36,9 +36,8 @@
 
 ```bash
 npm install
-npm run check     # 总闸：类型检查 + 50 个测试（应全绿）
+npm run check     # 总闸：类型检查 + 全部测试（应全绿）
 npm run admin     # 管理台：http://localhost:3001/admin（推荐入口）
-npm run dev       # 业务服务：http://localhost:3000
 npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 ```
 
@@ -63,8 +62,8 @@ npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
   ⑤ 实现(AI 助手-C)  ⑥ 接入(AI 助手-E)  ⑦ 完成
 
 各环节机器验收测试：
-  数据接口：7 项纪律初审（纯接口/零 import/JSDoc/Promise…）
-  功能规格：结构/数据接口引用/tsc 初审 + 10 项人评审
+  数据接口：7 项纪律自动检查（纯接口/零 import/JSDoc/Promise…）
+  功能规格：结构/数据接口引用/tsc 自动检查 + 10 项人评审
   验收测试：红灯 = 考卷就绪（占位验收测试禁止定稿）
   实现：验收测试全绿才提交（红则迭代 ≤5 轮，超限停手求援）
   接入：编译预检（写入→编译→自动还原），编译不过禁止确认
@@ -76,7 +75,7 @@ npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 
 ```bash
 npm run check                          # 总闸
-npm run admin / dev / migrate          # 管理台 / 业务 / 建表
+npm run admin / migrate                # 管理台 / 建表
 npm run feat -- new-group <组名>        # 新业务系统
 npm run feat -- new <名字> [--group <组>]   # 新功能
 npm run feat -- ai-contract <名字> "<需求>" [--mock] [--yes]  # AI 功能规格 + 人确认

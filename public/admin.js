@@ -609,7 +609,7 @@ function renderQuickGrid() {
   const cards = [
     { icon: "📦", title: "继续开发", desc: `选择左侧功能，在「功能开发」页按 4 阶段推进（共 ${state.units.length} 个）`, goto: "unit" },
     { icon: "🔌", title: "数据接口", desc: "接口清单 / AI 生成接口/ 定稿", goto: "ports" },
-    { icon: "🧪", title: "业务测试", desc: "注册/登录/查我，验证业务", goto: "play" },
+    { icon: "🧪", title: "业务测试", desc: "健康检查冒烟（功能接入后补充操作）", goto: "play" },
     { icon: "⚙️", title: "配置", desc: "存储模式（memory/file/sqlite）/ AI 密钥", goto: "config" },
   ];
   $("quick-grid").innerHTML = cards.map((c) => `
@@ -873,7 +873,7 @@ async function renderOnboarding() {
     },
     {
       icon: "🧪", title: "第 4 步：试试业务",
-      body: "用<b>内置业务测试</b>验证你创建的功能（注册/登录/查我…），cookie 自动流转，无需另起服务。<br>还没有业务时会提示你：先回「开始」页创建第一个功能。",
+      body: "用<b>内置业务测试</b>验证你创建的功能（空框架为健康检查，接入功能后补充对应冒烟操作），cookie 自动流转，无需另起服务。<br>还没有业务时会提示你：先回「开始」页创建第一个功能。",
       goto: "play", gotoText: "去业务测试 →",
     },
     {
