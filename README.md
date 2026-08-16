@@ -151,7 +151,7 @@ pm2 start npm --name featureunit -- run start          # pm2
 
 ## 九、本项目如何诞生（以及你如何用 AI 协作改造它）
 
-**本项目（框架代码、管理台、文档、测试）由作者与 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（AI 编程代理）逐轮对话协作完成**：作者提出设计想法与验收标准（前后约 60 轮设计迭代），Harness 负责实现、测试、写文档，作者在每个关键决策处确认——正是本框架主张的"AI 生成 → 机器判据 → 人确认"流程的真实实践。
+**本项目（框架代码、管理台、文档、测试）由作者与 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness)（DeepSeek 官方 AI 编程代理）逐轮对话协作完成**：底层由 **DeepSeek 大模型（deepseek-v4-flash）** 驱动，作者提出设计想法与验收标准（前后约 60 轮设计迭代），Harness 负责实现、测试、写文档，作者在每个关键决策处确认——正是本框架主张的"AI 生成 → 机器判据 → 人确认"流程的真实实践。
 
 **你也可以使用 DeepSeek Harness 辅助修改/扩展本框架**，建议方式：
 
