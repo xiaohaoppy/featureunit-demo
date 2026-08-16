@@ -209,7 +209,7 @@ describe("toggle-favorite 单元判据", () => {
 
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
   const doneOk = r.data.step === "done" && (r.data.error ?? "") === "";
-  report("⑥ 接入确认 → 完成", doneOk, (r.data.error ?? r.data.artifact?.apply?.message ?? "").slice(0, 120));
+  report("⑥ 接入确认 → 完成", doneOk, JSON.stringify(r.data).slice(0, 150));
 }
 
 // ---------------------------------------------------------------------------
