@@ -53,6 +53,7 @@ import {
   runUnitTest,
   runAllTests,
   buildTicketText,
+  checkGit,
   readSourceFile,
   listSourceFiles,
   createUnit,
@@ -855,6 +856,12 @@ app.get("/admin/api/source/list", (c) => {
 // ---------------------------------------------------------------------------
 // 启动
 // ---------------------------------------------------------------------------
+
+// 启动前检查 git（框架硬依赖：定稿/预演/回滚全靠它）
+const gitCheck = checkGit();
+if (!gitCheck.ok) {
+  console.warn("[admin] ⚠️ 未检测到 git——定稿/编译预检/回滚将不可用。请先安装 git：https://git-scm.com");
+}
 
 const PORT = Number(process.env.ADMIN_PORT ?? 3001);
 serve({ fetch: app.fetch, port: PORT }, (info) => {

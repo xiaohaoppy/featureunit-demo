@@ -34,6 +34,10 @@
 
 ## 二、快速开始
 
+**环境要求**（均需用户自行安装）：
+- **Node.js ≥ 20** + npm（https://nodejs.org）
+- **git ≥ 2.x**（https://git-scm.com）——框架硬依赖：定稿提交、编译预检还原、历史回滚全靠它；管理台/业务服务启动时会自动检测并提示
+
 ```bash
 npm install
 npm run check     # 总闸：类型检查 + 全部测试（应全绿）

@@ -17,8 +17,15 @@
 
 import { serve } from "@hono/node-server";
 import { join } from "node:path";
+import { checkGit } from "./ai-contract-lib.mjs";
 
 const ROOT = join(import.meta.dirname, ".."); // scripts/ → 项目根
+
+// 启动前检查 git（框架硬依赖：定稿/预演/回滚全靠它）
+const gitCheck = checkGit();
+if (!gitCheck.ok) {
+  console.warn("[server] ⚠️ 未检测到 git——本框架的留痕/回滚依赖 git，请先安装：https://git-scm.com");
+}
 const GROUP = process.env.GROUP ?? "auth-service";
 
 /** 加载指定业务系统的组合根与 HTTP 适配器（每组有自己独立的 index.ts / http.ts / config.ts）。 */

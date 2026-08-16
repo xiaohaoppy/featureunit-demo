@@ -21,6 +21,8 @@ export function unitDir(name: string, group?: string): string;
 export function pascal(kebab: string): string;
 export function camel(kebab: string): string;
 export function listGroups(): string[];
+/** 检查 git 是否可用（定稿/预演/回滚依赖）。 */
+export function checkGit(): { ok: boolean; version: string };
 /** 业务测试面板的冒烟操作（动态发现已接入功能）。 */
 export function listPlayOps(group?: string): Array<{
   label: string;
