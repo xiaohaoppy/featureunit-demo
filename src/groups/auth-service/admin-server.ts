@@ -83,8 +83,11 @@ let bizCache: { version: string; app: Hono } | null = null;
 async function bizAppFor(c: { req: { query(key: string): string | undefined } }): Promise<Hono> {
   const group = groupOf(c);
   const cfg = loadConfig(); // 每次读配置（含本地文件），校验失败会 fail fast
+  // 指纹 = 组合根 + HTTP 适配器 的 mtime（接入/人编辑任一变 → 自动重建实例）
   const indexTs = join(ROOT, "src/groups", group, "index.ts");
-  const fingerprint = existsSync(indexTs) ? String(statSync(indexTs).mtimeMs) : "?";
+  const httpTs = join(ROOT, "src/groups", group, "adapters", "http.ts");
+  const fp = (f: string) => (existsSync(f) ? String(statSync(f).mtimeMs) : "?");
+  const fingerprint = `${fp(indexTs)}:${fp(httpTs)}`;
   const version = JSON.stringify(cfg) + "|" + group + "|" + fingerprint;
   if (!bizCache || bizCache.version !== version) {
     // 动态 import 对应组的组合根与 HTTP 适配器（路由在每组自己的 http.ts 里）；

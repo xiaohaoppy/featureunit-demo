@@ -246,6 +246,14 @@ describe("toggle-favorite 单元判据", () => {
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
   const doneOk = r.data.step === "done" && (r.data.error ?? "") === "";
   report("⑥ 接入确认 → 完成", doneOk, JSON.stringify(r.data).slice(0, 150));
+
+  // 新组路由冒烟：接入路由必须真实注册（曾出现"插在 return 之后成死代码"的 bug——
+  // 编译预检能过但 HTTP 404，这里直接打新组路由防回归）
+  r = await api("/admin/api/play?group=favorite-service", {
+    method: "POST",
+    body: JSON.stringify({ method: "POST", path: "/api/toggle-favorite", data: { token: "t1", payload: {} } }),
+  });
+  report("新组路由冒烟（接入路由已注册）", r.status === 200 && r.data.status === 200, `HTTP ${r.data.status}`);
 }
 
 // ---------------------------------------------------------------------------
