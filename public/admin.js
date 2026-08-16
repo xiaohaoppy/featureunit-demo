@@ -30,7 +30,7 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 
-/** 请求（自动附带当前服务组）。 */
+/** 请求（自动附带当前业务系统）。 */
 async function api(path, opts = {}) {
   const sep = path.includes("?") ? "&" : "?";
   const res = await fetch(`${path}${sep}group=${encodeURIComponent(state.group)}`, {
@@ -72,7 +72,7 @@ async function withBusy(btn, busyText, fn) {
   }
 }
 
-/** 检查清单渲染（✅/⚠️ 列表，机器初审/接线/错误码等共用）。 */
+/** 检查清单渲染（✅/⚠️ 列表，自动检查/接入/错误编号等共用）。 */
 function renderChecks(checks) {
   return `<div class="check-list">${checks
     .map((c) => `<div class="check-row"><span class="mark">${c.ok ? "✅" : "⚠️"}</span><span>${escapeHtml(c.label)}</span></div>`)
@@ -80,7 +80,7 @@ function renderChecks(checks) {
 }
 
 /**
- * 共享文件编辑器（单元/端口详情共用）。
+ * 共享文件编辑器（功能/数据接口详情共用）。
  * 用法：editor.open({ title, content, warning, save: async (content, note) => result })
  * save 返回 { message }；保存成功自动关闭并调用 onSaved()。
  */
@@ -133,7 +133,7 @@ document.querySelectorAll(".tabs button").forEach((btn) => {
 });
 
 // ---------------------------------------------------------------------------
-// 服务组：切换 / 新建
+// 业务系统：切换 / 新建
 // ---------------------------------------------------------------------------
 
 async function loadGroups() {
@@ -155,11 +155,11 @@ async function loadGroups() {
 }
 
 $("btn-new-group").addEventListener("click", async () => {
-  const name = prompt("新服务组名（kebab-case，如 order-service）：", "order-service");
+  const name = prompt("新业务系统名（kebab-case，如 order-service）：", "order-service");
   if (!name || !/^[a-z0-9-]+$/.test(name)) return;
   try {
     await api("/admin/api/groups", { method: "POST", body: JSON.stringify({ name }) });
-    alert(`✓ 已创建服务组 ${name}（组骨架：ports/组合根/config/manifest/组判据）`);
+    alert(`✓ 已创建业务系统 ${name}（组骨架：ports/组合根/config/manifest/组验收测试）`);
     await loadGroups();
   } catch (err) {
     alert(`创建失败：${err.message}`);
@@ -167,11 +167,11 @@ $("btn-new-group").addEventListener("click", async () => {
 });
 
 $("btn-new-unit").addEventListener("click", async () => {
-  const name = prompt("新功能单元名（kebab-case，如 verify-2fa）：", "verify-2fa");
+  const name = prompt("新功能名（kebab-case，如 verify-2fa）：", "verify-2fa");
   if (!name || !/^[a-z0-9-]+$/.test(name)) return;
   try {
     await api("/admin/api/units", { method: "POST", body: JSON.stringify({ name }) });
-    alert(`✓ 已生成功能单元 ${name}\n下一步：在「AI 契约生成」面板生成契约，或人工填写。`);
+    alert(`✓ 已生成功能 ${name}\n下一步：在「AI 功能规格生成」面板生成功能规格，或人工填写。`);
     await loadUnits();
   } catch (err) {
     alert(`创建失败：${err.message}`);
@@ -179,17 +179,17 @@ $("btn-new-unit").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// 单元：列表 / 详情 / 编辑 / 判据 / 实现 / 接线 / 打包 / 历史 / 错误码
+// 功能：列表 / 详情 / 编辑 / 验收测试 / 实现 / 接入 / 接入 / 历史 / 错误编号
 // ---------------------------------------------------------------------------
 
 const FILE_LABELS = { contract: "contract.ts", spec: "spec.md", impl: "impl.ts", test: "impl.test.ts" };
-const FROZEN_WARN = { contract: "契约（冻结区）", spec: "规格（冻结区）", test: "判据（冻结区）", impl: "实现（AI 写入区）" };
+const FROZEN_WARN = { contract: "功能规格（定稿区）", spec: "规格（定稿区）", test: "验收测试（定稿区）", impl: "实现（AI 写入区）" };
 
 async function loadUnits() {
   try {
     const data = await api("/admin/api/units");
     state.units = data.units;
-    $("group-label").textContent = `${data.group} · ${data.units.length} 个功能单元`;
+    $("group-label").textContent = `${data.group} · ${data.units.length} 个功能`;
     renderQuickGrid();
 
     const ul = $("unit-list");
@@ -206,9 +206,9 @@ async function loadUnits() {
       <div class="unit-card">
         <h4>${u.name}</h4>
         <div class="badges">
-          ${u.frozen ? `<span class="badge ok">已冻结</span>` : u.hasContract ? `<span class="badge warn">契约草稿</span>` : `<span class="badge mute">无契约</span>`}
+          ${u.frozen ? `<span class="badge ok">已定稿</span>` : u.hasContract ? `<span class="badge warn">功能规格草稿</span>` : `<span class="badge mute">无功能规格</span>`}
           ${u.hasImpl ? `<span class="badge ok">实现</span>` : `<span class="badge err">无实现</span>`}
-          ${u.hasTest ? `<span class="badge ok">判据</span>` : `<span class="badge warn">无判据</span>`}
+          ${u.hasTest ? `<span class="badge ok">验收测试</span>` : `<span class="badge warn">无验收测试</span>`}
         </div>
         <div class="meta">点击左侧列表查看详情</div>
       </div>`).join("");
@@ -226,14 +226,14 @@ async function selectUnit(name, li) {
     state.unitFiles = data.files;
     state.unitFileTab = "contract";
     renderUnitDetail();
-    $("ai-name").value = name; // 契约生成自动带单元名
+    $("ai-name").value = name; // 功能规格生成自动带功能名
     loadUnitWizard();
   } catch (err) {
     $("unit-title").textContent = `加载失败：${err.message}`;
   }
 }
 
-/** 单元工作台：5 步进度条 + 各阶段状态（复用向导 status API）。 */
+/** 功能工作台：5 步进度条 + 各阶段状态（复用向导 status API）。 */
 async function loadUnitWizard() {
   if (!state.selectedUnit) return;
   $("unit-wizard-card").style.display = "block";
@@ -245,16 +245,16 @@ async function loadUnitWizard() {
     }).join("");
     $("unit-wizard-hint").textContent = r.steps.map((s) => (s.done ? "" : `▶ ${s.hint}`)).filter(Boolean).join(" ｜ ") || "✅ 全部完成";
     // 各阶段状态徽标
-    $("state-contract").textContent = r.steps[0]?.done ? "✅ 已冻结" : "待生成";
+    $("state-contract").textContent = r.steps[0]?.done ? "✅ 已定稿" : "待生成";
     $("state-judge").textContent = r.steps[1]?.done ? "✅ 就绪" : "待生成";
     $("state-impl").textContent = r.steps[2]?.done ? "✅ 完成" : "待实现";
-    $("state-wiring").textContent = r.steps[3]?.done ? "✅ 已接线" : "待接线";
+    $("state-wiring").textContent = r.steps[3]?.done ? "✅ 已接入" : "待接入";
   } catch { /* 忽略 */ }
 }
 
 function renderUnitDetail() {
   const u = state.units.find((x) => x.name === state.selectedUnit);
-  $("unit-title").textContent = `单元详情：${state.selectedUnit}${u?.frozen ? "（已冻结）" : ""}`;
+  $("unit-title").textContent = `功能详情：${state.selectedUnit}${u?.frozen ? "（已定稿）" : ""}`;
   $("file-tabs").innerHTML = Object.entries(FILE_LABELS)
     .map(([key, label]) => `<button class="${key === state.unitFileTab ? "active" : ""}" data-file="${key}">${label}</button>`)
     .join("");
@@ -273,7 +273,7 @@ $("btn-edit-toggle").addEventListener("click", () => {
   editor.open({
     title: `编辑 ${state.selectedUnit}/${FILE_LABELS[file]}（${FROZEN_WARN[file] ?? ""}）`,
     content: state.unitFiles[file] ?? "",
-    warning: "冻结区文件（契约/判据/规格）由人编辑是允许的，但每次保存都会留下 git 记录——请填写修改说明。",
+    warning: "定稿区文件（功能规格/验收测试/规格）由人编辑是允许的，但每次保存都会留下 git 记录——请填写修改说明。",
     save: async (content, note) =>
       api(`/admin/api/units/${state.selectedUnit}/files`, { method: "PUT", body: JSON.stringify({ file, content, note }) }),
     onSaved: async () => {
@@ -284,7 +284,7 @@ $("btn-edit-toggle").addEventListener("click", () => {
   });
 });
 
-// —— 运行本单元判据 ——
+// —— 运行本功能验收测试 ——
 $("btn-run-unit").addEventListener("click", () =>
   withBusy($("btn-run-unit"), "运行中…", async () => {
     const r = await api(`/admin/api/units/${state.selectedUnit}/test`, { method: "POST" });
@@ -294,35 +294,35 @@ $("btn-run-unit").addEventListener("click", () =>
     out.textContent = r.output;
   }));
 
-// —— 运行全部判据 ——
+// —— 运行全部验收测试 ——
 $("btn-run-all").addEventListener("click", () =>
   withBusy($("btn-run-all"), "运行中…", async () => {
     const r = await api("/admin/api/tests/all", { method: "POST" });
     panel($("overview-output"), `[${r.ok ? "✅ 全部通过" : "❌ 有失败"}] ${r.summary}\n\n${r.output}`);
   }));
 
-// —— 接线检查 + 一键接线（含 AI 打包按钮复用同一输出区）——
+// —— 接入检查 + 一键接入（含 AI 接入按钮复用同一输出区）——
 async function loadWiringAndPack(kind) {
   const box = kind === "wiring" ? $("wiring-result") : $("pack-result");
   panel(box, "加载中…");
   const r = await api(`/admin/api/units/${state.selectedUnit}/wiring`);
-  let html = `<div class="msg ${r.allOk ? "ok" : "warn"}">${r.allOk ? "✅ 已完整接线" : "⚠️ 尚未完全接线"}</div>`;
+  let html = `<div class="msg ${r.allOk ? "ok" : "warn"}">${r.allOk ? "✅ 已完整接入" : "⚠️ 尚未完全接入"}</div>`;
   html += renderChecks(r.checks);
 
   if (!r.allOk) {
     try {
       const p = await api(`/admin/api/units/${state.selectedUnit}/wiring/preview`);
       if (p.alreadyWired) {
-        html += `<div class="msg ok">已接线，无需改动。</div>`;
+        html += `<div class="msg ok">已接入，无需改动。</div>`;
       } else if (p.files.length) {
-        html += `<div class="msg warn">机器生成的接线改动（<b>人审阅后确认才落盘</b>）：</div>`;
+        html += `<div class="msg warn">机器生成的接入改动（<b>人审阅后确认才落盘</b>）：</div>`;
         html += p.files.map((f) => `<div style="font-weight:600;margin:8px 0 4px">${escapeHtml(f.path)}</div><pre class="code" style="max-height:260px">${escapeHtml(f.diffText)}</pre>`).join("");
-        html += `<div class="row" style="margin-top:10px"><button class="btn" id="btn-wire-apply">确认接线（落盘 + git 提交）</button></div>`;
+        html += `<div class="row" style="margin-top:10px"><button class="btn" id="btn-wire-apply">确认接入（落盘 + git 提交）</button></div>`;
       } else {
-        html += `<div class="msg err">无法生成接线改动（锚点缺失），请人工编辑组合根。</div>`;
+        html += `<div class="msg err">无法生成接入改动（锚点缺失），请人工编辑组合根。</div>`;
       }
     } catch (e2) {
-      html += `<div class="msg err">接线预览失败：${escapeHtml(e2.message)}</div>`;
+      html += `<div class="msg err">接入预览失败：${escapeHtml(e2.message)}</div>`;
     }
   }
   panel(box, html);
@@ -331,7 +331,7 @@ async function loadWiringAndPack(kind) {
     applyBtn.addEventListener("click", () =>
       withBusy(applyBtn, "落盘中…", async () => {
         const res = await api(`/admin/api/units/${state.selectedUnit}/wiring/apply`, {
-          method: "POST", body: JSON.stringify({ note: "管理台接线确认" }),
+          method: "POST", body: JSON.stringify({ note: "管理台接入确认" }),
         });
         panel(box, `<div class="msg ${res.ok ? "ok" : "err"}">${escapeHtml(res.message)}</div>`);
         await loadUnits();
@@ -341,11 +341,11 @@ async function loadWiringAndPack(kind) {
 
 $("btn-wiring").addEventListener("click", () => loadWiringAndPack("wiring"));
 
-// —— AI 打包（Agent-E）：预演 → 确认落盘 ——
+// —— 🤖 自动接入：预演 → 确认落盘 ——
 $("btn-pack").addEventListener("click", () =>
-  withBusy($("btn-pack"), "AI 打包中…", async () => {
+  withBusy($("btn-pack"), "AI 接入中…", async () => {
     const box = $("pack-result");
-    panel(box, "AI 打包中（mock=规则生成+tsc 预演）…");
+    panel(box, "AI 接入中（mock=规则生成+编译预检）…");
     const r = await api(`/admin/api/units/${state.selectedUnit}/wiring/ai`, {
       method: "POST", body: JSON.stringify({ mock: true }),
     });
@@ -360,7 +360,7 @@ $("btn-pack").addEventListener("click", () =>
       applyBtn.addEventListener("click", () =>
         withBusy(applyBtn, "落盘中…", async () => {
           const res = await api(`/admin/api/units/${state.selectedUnit}/wiring/apply`, {
-            method: "POST", body: JSON.stringify({ note: "AI 打包（Agent-E）确认" }),
+            method: "POST", body: JSON.stringify({ note: "🤖 自动接入确认" }),
           });
           panel(box, `<div class="msg ${res.ok ? "ok" : "err"}">${escapeHtml(res.message)}</div>`);
           await loadUnits();
@@ -368,7 +368,7 @@ $("btn-pack").addEventListener("click", () =>
     }
   }));
 
-// —— AI 生成判据 / 冻结 ——
+// —— AI 生成验收测试 / 定稿 ——
 function aiWorkOut(text) {
   const box = $("ai-work-output");
   box.style.display = "block";
@@ -377,13 +377,13 @@ function aiWorkOut(text) {
 
 $("btn-judge").addEventListener("click", () => {
   if (!state.selectedUnit) return;
-  if ((state.unitFiles?.test ?? "").includes("冻结记录")) {
-    alert("该单元判据已冻结——不允许被 AI 生成覆盖（纪律守卫）。如需修改请走契约演进流程。");
+  if ((state.unitFiles?.test ?? "").includes("定稿记录")) {
+    alert("该功能验收测试已定稿——不允许被 AI 生成覆盖（纪律守卫）。如需修改请走功能规格演进流程。");
     return;
   }
   withBusy($("btn-judge"), "生成中…", async () => {
     const r = await api(`/admin/api/units/${state.selectedUnit}/judge`, { method: "POST", body: JSON.stringify({ mock: true }) });
-    aiWorkOut(`判据草稿已生成（${r.invariants.length} 条不变量 → 对应测试骨架）\n\n请切到 impl.test.ts 查看，逐条补全断言后点「确认判据（冻结）」。`);
+    aiWorkOut(`验收测试草稿已生成（${r.invariants.length} 条不变量 → 对应测试骨架）\n\n请切到 impl.test.ts 查看，逐条补全断言后点「确认验收测试（定稿）」。`);
     const data = await api(`/admin/api/units/${state.selectedUnit}`);
     state.unitFiles = data.files;
     state.unitFileTab = "test";
@@ -392,7 +392,7 @@ $("btn-judge").addEventListener("click", () => {
 });
 
 $("btn-judge-freeze").addEventListener("click", () =>
-  withBusy($("btn-judge-freeze"), "冻结中…", async () => {
+  withBusy($("btn-judge-freeze"), "定稿中…", async () => {
     const r = await api(`/admin/api/units/${state.selectedUnit}/judge/freeze`, { method: "POST", body: JSON.stringify({}) });
     aiWorkOut(`✅ ${r.message}`);
     await loadUnits();
@@ -401,9 +401,9 @@ $("btn-judge-freeze").addEventListener("click", () =>
 // —— AI 实现（自动迭代）——
 $("btn-implement").addEventListener("click", () =>
   withBusy($("btn-implement"), "实现中（自动迭代）…", async () => {
-    aiWorkOut("内置实现器启动：读契约+判据 → 生成 impl.ts → 跑判据 → 红则重试…\n");
+    aiWorkOut("内置实现器启动：读功能规格+验收测试 → 生成 impl.ts → 跑验收测试 → 红则重试…\n");
     const r = await api(`/admin/api/units/${state.selectedUnit}/implement`, { method: "POST", body: JSON.stringify({ mock: true, maxRounds: 5 }) });
-    aiWorkOut(`${r.rounds.map((x) => `第 ${x.round} 轮 → ${x.ok ? "✅ 判据全绿" : "❌ 判据红：" + x.summary}`).join("\n")}\n\n${r.ok ? "✅ " : "⚠️ "}${r.message}`);
+    aiWorkOut(`${r.rounds.map((x) => `第 ${x.round} 轮 → ${x.ok ? "✅ 验收测试全绿" : "❌ 验收测试红：" + x.summary}`).join("\n")}\n\n${r.ok ? "✅ " : "⚠️ "}${r.message}`);
     if (r.ok) {
       const data = await api(`/admin/api/units/${state.selectedUnit}`);
       state.unitFiles = data.files;
@@ -418,10 +418,10 @@ $("btn-history").addEventListener("click", () =>
     const box = $("history-result");
     const r = await api(`/admin/api/units/${state.selectedUnit}/history`);
     if (!r.commits.length) {
-      panel(box, `<div class="msg warn">该单元还没有提交历史。</div>`);
+      panel(box, `<div class="msg warn">该功能还没有提交历史。</div>`);
       return;
     }
-    panel(box, `<div class="msg warn">该单元最近提交（点击回滚 = git revert，历史保留）：</div>` +
+    panel(box, `<div class="msg warn">该功能最近提交（点击回滚 = git revert，历史保留）：</div>` +
       `<div class="check-list">` +
       r.commits.map((c) => `<div class="review-item"><span class="idx">${c.hash.slice(0, 7)}</span><span class="text">${escapeHtml(c.subject)}</span><button class="btn ghost" style="padding:3px 10px" data-hash="${c.hash}">回滚</button></div>`).join("") +
       `</div>`);
@@ -436,19 +436,19 @@ $("btn-history").addEventListener("click", () =>
     });
   }));
 
-// —— 错误码一致性检查 ——
+// —— 错误编号一致性检查 ——
 $("btn-errorcodes").addEventListener("click", () =>
   withBusy($("btn-errorcodes"), "检查中…", async () => {
     const box = $("errorcodes-result");
     const r = await api(`/admin/api/units/${state.selectedUnit}/errorcodes`);
     panel(box, r.ok
-      ? `<div class="msg ok">✅ 一致：spec 声明 ${r.declaredInSpec.length} 个错误码，impl 全部覆盖，且都已在 ports/errors.ts 定义。</div>`
+      ? `<div class="msg ok">✅ 一致：spec 声明 ${r.declaredInSpec.length} 个错误编号，impl 全部覆盖，且都已在 ports/errors.ts 定义。</div>`
       : `<div class="msg err">⚠️ 发现 ${r.problems.length} 处不一致：</div>` + renderChecks(r.problems.map((p) => ({ label: p, ok: false }))) +
         `<div class="hint" style="margin-top:6px">spec：${r.declaredInSpec.join(", ") || "（无）"} ｜ impl：${r.thrownInImpl.join(", ") || "（无）"}</div>`);
   }));
 
 // ---------------------------------------------------------------------------
-// AI 契约生成
+// AI 功能规格生成
 // ---------------------------------------------------------------------------
 
 $("btn-ai-generate").addEventListener("click", () => {
@@ -456,8 +456,8 @@ $("btn-ai-generate").addEventListener("click", () => {
   const requirement = $("ai-req").value.trim();
   const mock = $("ai-mode").value === "mock";
   $("ai-msg").innerHTML = "";
-  if (!name || !requirement) return msg($("ai-msg"), "请填写功能单元名和一句话需求", "err");
-  if (!/^[a-z0-9-]+$/.test(name)) return msg($("ai-msg"), "功能单元名只允许小写字母/数字/连字符", "err");
+  if (!name || !requirement) return msg($("ai-msg"), "请填写功能名和一句话需求", "err");
+  if (!/^[a-z0-9-]+$/.test(name)) return msg($("ai-msg"), "功能名只允许小写字母/数字/连字符", "err");
 
   withBusy($("btn-ai-generate"), "生成中…", async () => {
     const draft = await api("/admin/api/ai/generate", { method: "POST", body: JSON.stringify({ name, requirement, mock }) });
@@ -489,7 +489,7 @@ $("btn-ai-generate").addEventListener("click", () => {
     $("ai-draft-card").style.display = "block";
     $("ai-review-card").style.display = "block";
     $("ai-freeze-msg").innerHTML = "";
-    msg($("ai-msg"), `草稿已生成（${draft.source === "mock" ? "演示模式" : "真实 AI"}）。请逐条评审，全部"通过"才可冻结。`, "warn");
+    msg($("ai-msg"), `草稿已生成（${draft.source === "mock" ? "演示模式" : "真实 AI"}）。请逐条评审，全部"通过"才可定稿。`, "warn");
   });
 });
 
@@ -505,22 +505,22 @@ function setReview(i, ok) {
 }
 
 $("btn-ai-freeze-confirm").addEventListener("click", () =>
-  withBusy($("btn-ai-freeze-confirm"), "冻结中…", async () => {
+  withBusy($("btn-ai-freeze-confirm"), "定稿中…", async () => {
     if (!state.aiDraft) return;
     const unanswered = state.aiReviews.filter((x) => x === null).length;
     if (unanswered > 0) return msg($("ai-freeze-msg"), `还有 ${unanswered} 项未评审`, "err");
-    if (state.aiReviews.includes(false)) return msg($("ai-freeze-msg"), "存在「打回」项——不能冻结", "err");
+    if (state.aiReviews.includes(false)) return msg($("ai-freeze-msg"), "存在「打回」项——不能定稿", "err");
     const r = await api("/admin/api/ai/freeze", { method: "POST", body: JSON.stringify({ name: state.aiDraft.name, reviews: state.aiReviews }) });
-    msg($("ai-freeze-msg"), r.frozen ? `✅ ${r.message}` : "未冻结", r.frozen ? "ok" : "err");
+    msg($("ai-freeze-msg"), r.frozen ? `✅ ${r.message}` : "未定稿", r.frozen ? "ok" : "err");
     loadUnits();
   }));
 
 // ---------------------------------------------------------------------------
-// Ticket / 源码浏览 / 试玩 / 向导
+// 任务单 / 代码浏览浏览 / 业务测试 / 向导
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// Ticket（并入单元工作台）
+// 任务单（并入功能工作台）
 // ---------------------------------------------------------------------------
 
 $("btn-ticket").addEventListener("click", () =>
@@ -590,7 +590,7 @@ $("btn-play-send").addEventListener("click", () =>
     }
     const r = await api("/admin/api/play", { method: "POST", body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }) });
     $("play-output").textContent = `HTTP ${r.status}\n${r.body}`;
-    $("play-storage").textContent = r.status === 404 ? "还没有业务路由——先用 🏠 开始页说一句话创建你的第一个功能" : "✅ 业务已就绪";
+    $("play-storage").textContent = r.status === 404 ? "还没有业务——先用 🏠 开始页说一句话创建你的第一个功能" : "✅ 业务已就绪";
     if (r.setCookie) {
       const m = /sid=([^;]+)/.exec(r.setCookie);
       playCookie = m ? `sid=${m[1]}` : playCookie;
@@ -611,7 +611,7 @@ $("btn-play-clear").addEventListener("click", () => {
 function renderQuickGrid() {
   const cards = [
     { icon: "📦", title: "继续开发", desc: `选择左侧功能，在「功能开发」页按 4 阶段推进（共 ${state.units.length} 个）`, goto: "unit" },
-    { icon: "🔌", title: "数据接口", desc: "接口清单 / AI 生成（Agent-D）/ 冻结", goto: "ports" },
+    { icon: "🔌", title: "数据接口", desc: "接口清单 / AI 生成接口/ 定稿", goto: "ports" },
     { icon: "🧪", title: "业务测试", desc: "注册/登录/查我，验证业务", goto: "play" },
     { icon: "⚙️", title: "配置", desc: "存储模式（memory/file/sqlite）/ AI 密钥", goto: "config" },
   ];
@@ -633,7 +633,7 @@ function renderQuickGrid() {
 }
 
 // ---------------------------------------------------------------------------
-// 端口：清单 / 详情 / 编辑 / AI 生成 / 冻结
+// 数据接口：清单 / 详情 / 编辑 / AI 生成 / 定稿
 // ---------------------------------------------------------------------------
 
 async function loadPorts() {
@@ -642,7 +642,7 @@ async function loadPorts() {
   try {
     const r = await api("/admin/api/ports");
     if (!r.ports.length) {
-      grid.innerHTML = `<span class="hint">（该组还没有端口）</span>`;
+      grid.innerHTML = `<span class="hint">（该组还没有数据接口）</span>`;
       return;
     }
     grid.innerHTML = "";
@@ -652,20 +652,20 @@ async function loadPorts() {
       card.innerHTML = `
         <h4>${escapeHtml(p.name)} <code style="color:var(--muted);font-size:11px">${escapeHtml(p.interfaceName)}</code></h4>
         <div class="hint" style="margin:6px 0">${escapeHtml(p.description)}</div>
-        <div class="badges"><span class="badge mute">📌 依赖 ${p.usedBy.length} 单元</span><span class="badge mute">🔧 适配器 ${p.adapters.length}</span></div>
+        <div class="badges"><span class="badge mute">📌 依赖 ${p.usedBy.length} 功能</span><span class="badge mute">🔧 实现 ${p.adapters.length}</span></div>
         <div class="hint" style="margin-top:6px">${p.usedBy.map((u) => `<code>${escapeHtml(u)}</code>`).join(" ")}</div>`;
       card.addEventListener("click", async () => {
         $("port-detail-card").style.display = "block";
-        $("port-detail-title").textContent = `端口详情：${p.name}（${p.interfaceName}）`;
+        $("port-detail-title").textContent = `数据接口详情：${p.name}（${p.interfaceName}）`;
         $("port-detail-content").textContent = "加载中…";
         try {
           const src = await api(`/admin/api/source?file=ports/${p.name}.ts`);
-          const frozen = src.content.includes("冻结记录");
+          const frozen = src.content.includes("定稿记录");
           state.portDetail = { name: p.name, content: src.content, frozen };
-          $("port-detail-status").textContent = frozen ? "🔒 已冻结（编辑将 git 留痕）" : "📄 草稿（未冻结）";
+          $("port-detail-status").textContent = frozen ? "🔒 已定稿（编辑将 git 留痕）" : "📄 草稿（未定稿）";
           const adapterLine = p.adapters.length
-            ? `\n\n—— 适配器实现：\n${p.adapters.map((a) => `  ${a}`).join("\n")}`
-            : "\n\n—— ⚠️ 暂无适配器实现（单元将无法注入该端口）";
+            ? `\n\n—— 实现实现：\n${p.adapters.map((a) => `  ${a}`).join("\n")}`
+            : "\n\n—— ⚠️ 暂无实现实现（功能将无法注入该数据接口）";
           $("port-detail-content").textContent = src.content + adapterLine;
         } catch (err) {
           $("port-detail-content").textContent = `加载失败：${err.message}`;
@@ -685,10 +685,10 @@ function portNewMsg(text, kind = "err") {
 $("btn-port-create").addEventListener("click", () => {
   const name = $("port-new-name").value.trim();
   const description = $("port-new-desc").value.trim();
-  if (!name || !/^[a-z0-9-]+$/.test(name)) return portNewMsg("端口名只允许小写字母/数字/连字符");
+  if (!name || !/^[a-z0-9-]+$/.test(name)) return portNewMsg("数据接口名只允许小写字母/数字/连字符");
   withBusy($("btn-port-create"), "创建中…", async () => {
     const r = await api("/admin/api/ports", { method: "POST", body: JSON.stringify({ name, description }) });
-    portNewMsg(`✅ 已创建端口 ${r.interfaceName}（冻结区模板，请人工填写接口方法）`, "ok");
+    portNewMsg(`✅ 已创建数据接口 ${r.interfaceName}（定稿区模板，请人工填写接口方法）`, "ok");
     $("port-new-name").value = "";
     $("port-new-desc").value = "";
     await loadPorts();
@@ -700,7 +700,7 @@ let portAiState = null;
 $("btn-port-ai").addEventListener("click", () => {
   const name = $("port-new-name").value.trim();
   const description = $("port-new-desc").value.trim();
-  if (!name || !/^[a-z0-9-]+$/.test(name)) return portNewMsg("请先填写端口名（kebab-case）");
+  if (!name || !/^[a-z0-9-]+$/.test(name)) return portNewMsg("请先填写数据接口名（kebab-case）");
   withBusy($("btn-port-ai"), "生成中…", async () => {
     const r = await api("/admin/api/ports/generate", {
       method: "POST",
@@ -711,13 +711,13 @@ $("btn-port-ai").addEventListener("click", () => {
     $("port-ai-checks").innerHTML = renderChecks(r.checks);
     $("port-ai-content").textContent = r.content;
     $("port-ai-hint").textContent = r.machineOk
-      ? "机器初审全部通过——请人审阅后确认冻结。"
-      : "机器初审发现纪律问题——请审阅并修正后确认（或打回人工编辑）。";
+      ? "自动检查全部通过——请人审阅后确认定稿。"
+      : "自动检查发现纪律问题——请审阅并修正后确认（或打回人工编辑）。";
   });
 });
 
 $("btn-port-freeze").addEventListener("click", () =>
-  withBusy($("btn-port-freeze"), "冻结中…", async () => {
+  withBusy($("btn-port-freeze"), "定稿中…", async () => {
     if (!portAiState) return;
     const r = await api(`/admin/api/ports/${portAiState.name}/freeze`, { method: "POST", body: JSON.stringify({}) });
     $("port-ai-hint").textContent = `✅ ${r.message}`;
@@ -726,13 +726,13 @@ $("btn-port-freeze").addEventListener("click", () =>
     await loadPorts();
   }));
 
-// —— 端口编辑（共享编辑器）——
+// —— 数据接口编辑（共享编辑器）——
 $("btn-port-edit").addEventListener("click", () => {
   if (!state.portDetail) return;
   editor.open({
-    title: `编辑端口 ${state.portDetail.name}${state.portDetail.frozen ? "（已冻结）" : "（草稿）"}`,
+    title: `编辑数据接口 ${state.portDetail.name}${state.portDetail.frozen ? "（已定稿）" : "（草稿）"}`,
     content: state.portDetail.content,
-    warning: "端口是冻结区文件——人编辑允许，但每次保存强制 git 留痕，请填写修改说明。",
+    warning: "数据接口是定稿区文件——人编辑允许，但每次保存强制 git 留痕，请填写修改说明。",
     save: async (content, note) =>
       api(`/admin/api/ports/${state.portDetail.name}`, { method: "PUT", body: JSON.stringify({ content, note }) }),
     onSaved: async () => {
@@ -744,7 +744,7 @@ $("btn-port-edit").addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 流水线（超级向导）
+// 自动开发（超级向导）
 // ---------------------------------------------------------------------------
 
 let pipe = null;
@@ -765,25 +765,25 @@ function renderPipeline() {
     html = `<div class="msg warn">规划方案（请确认或打回）：</div><div class="check-list">${art.plan.reasons.map((r) => `<div class="check-row"><span class="mark">📋</span><span>${escapeHtml(r)}</span></div>`).join("")}</div>`;
   }
   if (pipe.step === "port" && art.port) {
-    html = `<div class="msg warn">端口草稿（Agent-D）——机器初审：</div>${renderChecks(art.port.checks)}<pre class="code" style="max-height:200px">${escapeHtml(art.port.content)}</pre>`;
+    html = `<div class="msg warn">数据接口草稿（AI 助手-D）——自动检查：</div>${renderChecks(art.port.checks)}<pre class="code" style="max-height:200px">${escapeHtml(art.port.content)}</pre>`;
   }
   if (pipe.step === "contract" && art.draft) {
-    html = `<div class="msg warn">契约草稿（Agent-A）——机器初审：</div>${renderChecks(art.machine.checks)}<pre class="code" style="max-height:200px">${escapeHtml(art.draft.ts.slice(0, 1200))}</pre>`;
+    html = `<div class="msg warn">功能规格草稿（AI 助手-A）——自动检查：</div>${renderChecks(art.machine.checks)}<pre class="code" style="max-height:200px">${escapeHtml(art.draft.ts.slice(0, 1200))}</pre>`;
   }
   if (pipe.step === "judge" && art.judge) {
-    html = `<div class="msg warn">判据骨架（Agent-B，${art.judge.invariants.length} 条不变量）——占位判据不允许冻结，请先在「单元详情」补全断言</div><pre class="code" style="max-height:200px">${escapeHtml(art.judge.test.slice(0, 1000))}</pre>`;
+    html = `<div class="msg warn">验收测试骨架（AI 助手-B，${art.judge.invariants.length} 条不变量）——占位验收测试不允许定稿，请先在「功能详情」补全断言</div><pre class="code" style="max-height:200px">${escapeHtml(art.judge.test.slice(0, 1000))}</pre>`;
   }
   if (pipe.step === "implement" && art.impl) {
-    html = `<div class="msg warn">实现器结果（Agent-C，${art.impl.rounds.length} 轮）：</div>` +
+    html = `<div class="msg warn">实现器结果（AI 助手-C，${art.impl.rounds.length} 轮）：</div>` +
       `<div class="check-list">${art.impl.rounds.map((r) => `<div class="check-row"><span class="mark">${r.ok ? "✅" : "❌"}</span><span>第 ${r.round} 轮：${escapeHtml(r.summary)}</span></div>`).join("")}</div>` +
       `<div class="msg ${art.impl.ok ? "ok" : "warn"}">${escapeHtml(art.impl.message)}</div>`;
   }
   if (pipe.step === "wiring" && art.wiring) {
-    html = `<div class="msg warn">打包草稿（Agent-E）：${escapeHtml(art.wiring.source)}</div>`;
+    html = `<div class="msg warn">接入草稿（AI 助手-E）：${escapeHtml(art.wiring.source)}</div>`;
     if (art.wiring.preflight) html += `<div class="msg ${art.wiring.preflight.ok ? "ok" : "err"}">${escapeHtml(art.wiring.preflight.summary)}</div>`;
     if (art.wiring.checks) html += renderChecks(art.wiring.checks);
   }
-  if (pipe.step === "done") html = `<div class="msg ok">🎉 流水线完成。请运行总闸并冒烟验证。</div>`;
+  if (pipe.step === "done") html = `<div class="msg ok">🎉 自动开发完成。请运行总闸并冒烟验证。</div>`;
   $("pipe-artifact").innerHTML = html;
   $("pipe-actions").style.display = pipe.step === "done" ? "none" : "";
 }
@@ -854,7 +854,7 @@ async function renderOnboarding() {
   const STEPS = [
     {
       icon: "👋", title: "欢迎使用 FeatureUnit",
-      body: "这是一个<b>让 AI 放心写代码</b>的框架：<br>你只说一句话 → 系统自动规划（服务组/数据接口/功能）→ 逐步 AI 生成 → <b>机器判据把关</b> → <b>你确认</b>（每步都进 git，可追溯）。",
+      body: "这是一个<b>让 AI 放心写代码</b>的框架：<br>你只说一句话 → 系统自动规划（业务系统/数据接口/功能）→ 逐步 AI 生成 → <b>机器验收测试把关</b> → <b>你确认</b>（每步都进 git，可追溯）。",
       action: null,
     },
     {
@@ -866,18 +866,18 @@ async function renderOnboarding() {
     },
     {
       icon: "🗣️", title: "第 2 步：说一句话，创建第一个功能",
-      body: "在<b>下方输入框</b>描述需求（如：支持用户收藏商品）→ 「开始自动开发」。<br>系统会走 7 步流水线：规划 → 数据接口 → 契约 → 判据 → 实现 → 打包 → 完成，<b>每步你确认或打回</b>。",
+      body: "在<b>下方输入框</b>描述需求（如：支持用户收藏商品）→ 「开始自动开发」。<br>系统会走 7 步自动开发：规划 → 数据接口 → 功能规格 → 验收测试 → 实现 → 接入 → 完成，<b>每步你确认或打回</b>。",
       action: "start", actionText: "去输入 →",
     },
     {
-      icon: "📦", title: "第 3 步：认识开发工作台",
-      body: "每个功能按 <b>4 阶段</b>推进：<br>① 契约（AI 生成 + 10 项评审 + 冻结）② 判据（AI 生成 + 补全断言 + 冻结）③ 实现（AI 自动迭代，判据全绿才提交）④ 接线与工具（AI 打包 + tsc 预演 + 回滚/错误码检查）。<br>顶部进度条显示走到哪一步。",
+      icon: "📦", title: "第 3 步：认识功能工作台",
+      body: "每个功能按 <b>4 阶段</b>推进：<br>① 功能规格（AI 生成 + 10 项评审 + 定稿）② 验收测试（AI 生成 + 补全断言 + 定稿）③ 实现（AI 自动迭代，验收测试全绿才提交）④ 接入与工具（AI 接入 + 编译预检 + 回滚/错误编号检查）。<br>顶部进度条显示走到哪一步。",
       goto: "unit", gotoText: "去看工作台 →",
     },
     {
       icon: "🧪", title: "第 4 步：试试业务",
-      body: "用<b>内置试玩</b>验证你创建的功能（注册/登录/查我…），cookie 自动流转，无需另起服务。<br>还没有业务路由时会提示你：先回「开始」页创建第一个功能。",
-      goto: "play", gotoText: "去试玩 →",
+      body: "用<b>内置业务测试</b>验证你创建的功能（注册/登录/查我…），cookie 自动流转，无需另起服务。<br>还没有业务时会提示你：先回「开始」页创建第一个功能。",
+      goto: "play", gotoText: "去业务测试 →",
     },
     {
       icon: "🎉", title: "完成！接下来呢？",
@@ -931,7 +931,7 @@ async function renderOnboarding() {
 }
 
 // ---------------------------------------------------------------------------
-// 端口矩阵 / 配置
+// 数据接口矩阵 / 配置
 // ---------------------------------------------------------------------------
 
 async function loadPortMatrix() {
@@ -939,11 +939,11 @@ async function loadPortMatrix() {
   try {
     const r = await api("/admin/api/ports/map");
     if (!r.ports.length) {
-      box.innerHTML = `<span class="hint">（无单元或无端口）</span>`;
+      box.innerHTML = `<span class="hint">（无功能或无数据接口）</span>`;
       return;
     }
     box.innerHTML = `<table style="border-collapse:collapse;font-size:12.5px">
-      <tr><th style="text-align:left;padding:4px 10px">单元 \\ 端口</th>${r.ports.map((p) => `<th style="padding:4px 8px;font-family:var(--mono)">${p}</th>`).join("")}</tr>
+      <tr><th style="text-align:left;padding:4px 10px">功能 \\ 数据接口</th>${r.ports.map((p) => `<th style="padding:4px 8px;font-family:var(--mono)">${p}</th>`).join("")}</tr>
       ${r.units.map((u) => `<tr><td style="padding:4px 10px;font-family:var(--mono)">${u.name}</td>${r.ports.map((p) => `<td style="text-align:center;padding:4px 8px">${u.ports.includes(p) ? "●" : ""}</td>`).join("")}</tr>`).join("")}
     </table>`;
   } catch (err) {

@@ -96,7 +96,7 @@
   .btn.ghost { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
   .btn.danger { background: var(--err); }
 
-  /* 阶段分组（单元详情按开发节奏组织） */
+  /* 阶段分组（功能详情按开发节奏组织） */
   .stage { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); }
   .stage .stage-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
   .stage .stage-title { font-weight: 600; font-size: 13px; }
@@ -138,24 +138,24 @@
     <div class="sub" id="group-label">加载中…</div>
   </div>
   <div class="right">
-    <button class="btn ghost" id="btn-run-all">运行全部判据</button>
+    <button class="btn ghost" id="btn-run-all">运行全部验收测试</button>
     <button class="btn ghost" id="btn-refresh">刷新</button>
   </div>
 </header>
 
 <div class="layout">
-  <!-- 左侧：服务组 + 功能单元（常驻导航） -->
+  <!-- 左侧：业务系统 + 功能（常驻导航） -->
   <aside>
-    <h3>服务组</h3>
+    <h3>业务系统</h3>
     <div class="row" style="margin-bottom:10px">
       <select id="group-select" style="flex:1"></select>
-      <button id="btn-new-group" class="btn ghost" style="padding:6px 10px" title="新建服务组">＋</button>
+      <button id="btn-new-group" class="btn ghost" style="padding:6px 10px" title="新建业务系统">＋</button>
     </div>
-    <h3>功能单元</h3>
+    <h3>功能</h3>
     <ul id="unit-list"></ul>
-    <button class="side-btn" id="btn-new-unit">＋ 新功能单元</button>
+    <button class="side-btn" id="btn-new-unit">＋ 新功能</button>
     <div class="hint" style="margin-top:8px">
-      <span class="badge ok">● 已冻结</span>
+      <span class="badge ok">● 已定稿</span>
       <span class="badge warn">● 草稿</span>
       <span class="badge mute">● 未生成</span>
     </div>
@@ -165,10 +165,10 @@
   <main>
     <nav class="tabs">
       <button data-tab="start" class="active">🏠 开始</button>
-      <button data-tab="unit">📦 功能开发（单元）</button>
-      <button data-tab="ports">🔌 数据接口（端口）</button>
-      <button data-tab="play">🧪 业务测试（试玩）</button>
-      <button data-tab="source">📄 代码浏览（源码）</button>
+      <button data-tab="unit">📦 功能开发</button>
+      <button data-tab="ports">🔌 数据接口</button>
+      <button data-tab="play">🧪 业务测试</button>
+      <button data-tab="source">📄 代码浏览</button>
       <button data-tab="config">⚙️ 配置</button>
     </nav>
 
@@ -177,7 +177,7 @@
       <div id="onboarding" style="margin-bottom:14px"></div>
       <div class="card hero">
         <h2>你想实现什么功能？</h2>
-        <div class="hint">说一句话，系统自动规划服务组 / 端口 / 单元，逐步生成，你在每一步确认</div>
+        <div class="hint">说一句话，系统自动规划业务系统 / 数据接口 / 功能，逐步生成，你在每一步确认</div>
         <div class="row">
           <input type="text" id="pipe-req" placeholder="如：支持用户收藏商品 / 管理收货地址 / 记录库存变动" />
           <button class="btn" id="btn-pipe-start">开始自动开发</button>
@@ -186,7 +186,7 @@
       </div>
       <div id="pipe-body" style="display:none">
         <div class="card">
-          <h2>流水线进度</h2>
+          <h2>自动开发进度</h2>
           <div id="pipe-steps" class="hint"></div>
           <div id="pipe-log" class="output-box" style="margin-top:10px; max-height:150px"></div>
           <div id="pipe-artifact" style="margin-top:10px"></div>
@@ -201,16 +201,16 @@
         <div class="grid" id="quick-grid"></div>
       </div>
       <div class="card">
-        <h2>服务组概览（端口依赖矩阵）</h2>
+        <h2>业务系统概览（数据接口依赖矩阵）</h2>
         <div id="ports-matrix" class="hint">加载中…</div>
       </div>
       <div class="card">
         <h2>总闸输出</h2>
-        <div id="overview-output" class="output-box">点击右上角"运行全部判据"查看总闸结果。</div>
+        <div id="overview-output" class="output-box">点击右上角"运行全部验收测试"查看总闸结果。</div>
       </div>
     </section>
 
-    <!-- 单元：开发工作台（向导 + 四阶段 + 工具） -->
+    <!-- 功能：开发工作台（向导 + 四阶段 + 工具） -->
     <section class="panel" id="panel-unit">
       <div class="card" id="unit-wizard-card" style="display:none">
         <h2>开发进度</h2>
@@ -220,20 +220,20 @@
       <div class="card">
         <h2 id="unit-title">功能开发工作台（先在左侧选择功能）</h2>
         <div class="file-tabs" id="file-tabs"></div>
-        <pre class="code" id="file-content">请在左侧选择一个功能单元。</pre>
+        <pre class="code" id="file-content">请在左侧选择一个功能。</pre>
 
-        <!-- ① 契约 -->
+        <!-- ① 功能规格 -->
         <div class="stage" id="stage-contract">
-          <div class="stage-head"><span class="stage-title">① 契约</span><span class="stage-state" id="state-contract">—</span></div>
+          <div class="stage-head"><span class="stage-title">① 功能规格</span><span class="stage-state" id="state-contract">—</span></div>
           <div class="stage-actions">
-            <input type="text" id="ai-name" placeholder="功能单元名（已选单元时自动填充）" style="flex:0 1 200px" />
+            <input type="text" id="ai-name" placeholder="功能名（已选功能时自动填充）" style="flex:0 1 200px" />
             <input type="text" id="ai-req" placeholder="一句话需求" style="flex:1" />
             <select id="ai-mode" style="flex:0 1 130px">
               <option value="mock">演示模式</option>
               <option value="live">真实模式</option>
             </select>
-            <button class="btn" id="btn-ai-generate">AI 生成契约</button>
-            <button class="btn ghost" id="btn-ai-freeze">确认冻结</button>
+            <button class="btn" id="btn-ai-generate">AI 生成功能规格</button>
+            <button class="btn ghost" id="btn-ai-freeze">确认定稿</button>
           </div>
           <div id="ai-msg"></div>
           <div id="ai-draft-card" style="display:none">
@@ -242,22 +242,22 @@
             <pre class="code" id="ai-draft-content"></pre>
           </div>
           <div id="ai-review-card" style="display:none">
-            <div class="hint" style="margin:8px 0">10 项评审逐条"通过/打回"，全部通过才可冻结：</div>
+            <div class="hint" style="margin:8px 0">10 项评审逐条"通过/打回"，全部通过才可定稿：</div>
             <div id="ai-review-list"></div>
             <div class="row" style="margin-top:8px">
-              <button class="btn" id="btn-ai-freeze-confirm">冻结契约</button>
+              <button class="btn" id="btn-ai-freeze-confirm">定稿功能规格</button>
               <span id="ai-freeze-msg"></span>
             </div>
           </div>
         </div>
 
-        <!-- ② 判据 -->
+        <!-- ② 验收测试 -->
         <div class="stage" id="stage-judge">
-          <div class="stage-head"><span class="stage-title">② 判据</span><span class="stage-state" id="state-judge">—</span></div>
+          <div class="stage-head"><span class="stage-title">② 验收测试</span><span class="stage-state" id="state-judge">—</span></div>
           <div class="stage-actions">
-            <button class="btn" id="btn-judge">AI 生成判据</button>
-            <button class="btn ghost" id="btn-judge-freeze">确认判据（冻结）</button>
-            <button class="btn" id="btn-run-unit">运行本单元判据</button>
+            <button class="btn" id="btn-judge">AI 生成验收测试</button>
+            <button class="btn ghost" id="btn-judge-freeze">确认验收测试（定稿）</button>
+            <button class="btn" id="btn-run-unit">运行本功能验收测试</button>
             <span id="unit-test-summary" class="hint"></span>
           </div>
           <div id="unit-test-output" class="output-box" style="margin-top:8px; display:none"></div>
@@ -269,21 +269,21 @@
           <div class="stage-head"><span class="stage-title">③ 实现</span><span class="stage-state" id="state-impl">—</span></div>
           <div class="stage-actions">
             <button class="btn" id="btn-implement">AI 实现（自动迭代）</button>
-            <button class="btn ghost" id="btn-pack">🤖 AI 打包（Agent-E）</button>
-            <span class="hint">判据全绿才提交；打包 = 组合根接线（tsc 预演）</span>
+            <button class="btn ghost" id="btn-pack">🤖 🤖 自动接入</button>
+            <span class="hint">验收测试全绿才提交；接入 = 组合根接入（编译预检）</span>
           </div>
           <div id="pack-result" style="margin-top:8px; display:none"></div>
         </div>
 
-        <!-- ④ 接线 / 工具 -->
+        <!-- ④ 接入 / 工具 -->
         <div class="stage" id="stage-ops">
-          <div class="stage-head"><span class="stage-title">④ 接线与工具</span><span class="stage-state" id="state-wiring">—</span></div>
+          <div class="stage-head"><span class="stage-title">④ 接入与工具</span><span class="stage-state" id="state-wiring">—</span></div>
           <div class="stage-actions">
-            <button class="btn ghost" id="btn-wiring">🔌 接线检查</button>
+            <button class="btn ghost" id="btn-wiring">🔌 接入检查</button>
             <button class="btn ghost" id="btn-edit-toggle">📝 编辑文件</button>
             <button class="btn ghost" id="btn-history">📜 历史/回滚</button>
-            <button class="btn ghost" id="btn-errorcodes">⚠️ 错误码检查</button>
-            <button class="btn ghost" id="btn-ticket">🎫 生成 Ticket</button>
+            <button class="btn ghost" id="btn-errorcodes">⚠️ 错误编号检查</button>
+            <button class="btn ghost" id="btn-ticket">🎫 生成 任务单</button>
           </div>
           <div id="wiring-result" style="margin-top:8px; display:none"></div>
           <div id="history-result" style="margin-top:8px; display:none"></div>
@@ -296,43 +296,43 @@
       </div>
     </section>
 
-    <!-- 端口：统一管理 -->
+    <!-- 数据接口：统一管理 -->
     <section class="panel" id="panel-ports">
       <div class="card">
-        <h2>数据接口管理（端口，冻结区：接口只读，新建由人确认）</h2>
+        <h2>数据接口管理（数据接口，定稿区：接口只读，新建由人确认）</h2>
         <div class="row" style="margin-top:8px">
-          <input type="text" id="port-new-name" placeholder="端口名（kebab-case，如 token-verifier）" style="flex:1" />
+          <input type="text" id="port-new-name" placeholder="数据接口名（kebab-case，如 token-verifier）" style="flex:1" />
           <input type="text" id="port-new-desc" placeholder="一句话用途（写入文件头）" style="flex:1.5" />
           <button class="btn" id="btn-port-create">＋ 手动新建</button>
-          <button class="btn" id="btn-port-ai">🤖 AI 生成（Agent-D）</button>
+          <button class="btn" id="btn-port-ai">🤖 AI 生成接口</button>
           <label class="hint" style="margin:0"><input type="checkbox" id="port-ai-mock" checked /> mock</label>
         </div>
         <div id="port-msg"></div>
       </div>
       <div class="card" id="port-ai-card" style="display:none">
-        <h2>端口草稿 + 机器初审（纪律检查）</h2>
+        <h2>数据接口草稿 + 自动检查（纪律检查）</h2>
         <div class="check-list" id="port-ai-checks"></div>
         <pre class="code" id="port-ai-content" style="max-height:300px"></pre>
         <div class="row" style="margin-top:10px">
-          <button class="btn" id="btn-port-freeze">确认冻结（人审阅后）</button>
+          <button class="btn" id="btn-port-freeze">确认定稿（人审阅后）</button>
           <span class="hint" id="port-ai-hint"></span>
         </div>
       </div>
       <div class="card">
-        <h2>端口清单（📌 依赖它的单元 ｜ 🔧 适配器实现）</h2>
+        <h2>数据接口清单（📌 依赖它的功能 ｜ 🔧 实现实现）</h2>
         <div class="grid" id="port-grid"></div>
       </div>
       <div class="card" id="port-detail-card" style="display:none">
-        <h2 id="port-detail-title">端口详情</h2>
+        <h2 id="port-detail-title">数据接口详情</h2>
         <div class="row" style="margin-bottom:8px">
-          <button class="btn ghost" id="btn-port-edit">编辑此端口</button>
+          <button class="btn ghost" id="btn-port-edit">编辑此数据接口</button>
           <span class="hint" id="port-detail-status"></span>
         </div>
         <pre class="code" id="port-detail-content"></pre>
       </div>
     </section>
 
-    <!-- 试玩：业务冒烟 -->
+    <!-- 业务测试：业务冒烟 -->
     <section class="panel" id="panel-play">
       <div class="card">
         <h2>业务测试（冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）</h2>
@@ -351,10 +351,10 @@
       </div>
     </section>
 
-    <!-- 源码浏览 -->
+    <!-- 代码浏览浏览 -->
     <section class="panel" id="panel-source">
       <div class="card">
-        <h2>代码浏览（冻结区：接口 / 适配器 / 组合根 / 配置）</h2>
+        <h2>代码浏览（定稿区：接口 / 实现 / 组合根 / 配置）</h2>
         <div class="row">
           <select id="source-file" style="flex:1"></select>
           <button class="btn" id="btn-source-load">查看</button>
@@ -379,7 +379,7 @@
   </main>
 </div>
 
-<!-- 共享文件编辑器（单元/端口详情共用：人编辑 + 必填说明 + git 留痕） -->
+<!-- 共享文件编辑器（功能/数据接口详情共用：人编辑 + 必填说明 + git 留痕） -->
 <div id="editor-overlay" style="display:none; position:fixed; inset:0; background:rgba(15,20,35,.55); z-index:50; align-items:center; justify-content:center;">
   <div style="background:var(--panel); border-radius:12px; width:min(860px,92vw); max-height:86vh; overflow:auto; padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.3);">
     <h3 id="editor-title" style="margin-bottom:10px"></h3>

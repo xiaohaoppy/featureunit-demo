@@ -238,7 +238,7 @@ app.post("/admin/api/units/:name/wiring/ai", async (c) => {
   }
 });
 
-/** 开发向导状态：契约冻结/判据/实现/接线/上线 五步进度。 */
+/** 开发向导状态：功能规格定稿/判据/实现/接线/上线 五步进度。 */
 app.get("/admin/api/units/:name/status", (c) => {
   const name = c.req.param("name");
   const status = unitStatus(name, groupOf(c));
@@ -338,7 +338,7 @@ app.post("/admin/api/ports", async (c) => {
   }
 });
 
-/** AI 生成端口草稿（Agent-D）：body = { name, description, mock }。 */
+/** AI 生成数据接口草稿（AI 助手 D）：body = { name, description, mock }。 */
 app.post("/admin/api/ports/generate", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const { name, description, mock = true } = body as { name?: string; description?: string; mock?: boolean };
@@ -407,11 +407,11 @@ let pipeline: PipelineState | null = null;
 /** 流水线步骤说明（前端进度条用）。 */
 const PIPELINE_STEPS: Array<{ id: string; label: string }> = [
   { id: "plan", label: "① 需求规划" },
-  { id: "port", label: "② 端口生成" },
-  { id: "contract", label: "③ 契约生成" },
-  { id: "judge", label: "④ 判据生成" },
+  { id: "port", label: "② 数据接口生成" },
+  { id: "contract", label: "③ 功能规格生成" },
+  { id: "judge", label: "④ 验收测试生成" },
   { id: "implement", label: "⑤ 实现" },
-  { id: "wiring", label: "⑥ 打包接线" },
+  { id: "wiring", label: "⑥ 自动接入" },
   { id: "done", label: "⑦ 完成" },
 ];
 
@@ -484,7 +484,7 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
           const port = await generatePort(plan.portName, plan.portDescription, mock, group, "medium");
           pipeline.log.push("  · 推理等级：medium（端口设计）");
           pipeline.artifact = { port, portName: plan.portName };
-          pipeline.log.push(`  · 已生成端口草稿 ${plan.portName}（待初审确认）`);
+          pipeline.log.push(`  · 已生成数据接口草稿 ${plan.portName}（待初审确认）`);
         } else {
           pipeline.artifact = { port: null, note: "复用现有端口" };
         }
@@ -498,10 +498,10 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
           pipeline.log.push(`  · ${r.message}`);
         }
         const draft = await generateDraft(unit, pipeline.requirement, mock, group, "high");
-        pipeline.log.push("  · 推理等级：high（契约=考卷，最严谨）");
+        pipeline.log.push("  · 推理等级：high（功能规格=考卷，最严谨）");
         const mc = machineCheck(unit, draft.ts, draft.md, group);
         pipeline.artifact = { draft, machine: mc };
-        pipeline.log.push(`  · 已生成契约草稿（机器初审 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
+        pipeline.log.push(`  · 已生成功能规格草稿（机器初审 ${mc.checks.every((x) => x.ok) ? "通过" : "有告警"}）`);
         pipeline.step = "contract";
         break;
       }
@@ -510,9 +510,9 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         const r = freeze(unit, { generation: mock ? "模拟 AI" : "真实 AI", reviewer: "流水线确认", approved: "10/10" }, group);
         pipeline.log.push(`  · ${r.message}`);
         const judge = await generateJudgeTest(unit, mock, group, "high");
-        pipeline.log.push("  · 推理等级：high（判据需覆盖全部不变量）");
+        pipeline.log.push("  · 推理等级：high（验收测试需覆盖全部要求）");
         pipeline.artifact = { judge };
-        pipeline.log.push(`  · 已生成判据骨架（${judge.invariants.length} 条不变量）——占位判据需人工补全断言后才能冻结`);
+        pipeline.log.push(`  · 已生成验收测试骨架（${judge.invariants.length} 条不变量）——占位判据需人工补全断言后才能冻结`);
         pipeline.step = "judge";
         break;
       }
@@ -528,9 +528,9 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         break;
       }
       case "implement": {
-        // ⑤ 实现确认（含"停手求援"的人工接受）→ 打包接线
+        // ⑤ 实现确认（含"停手求援"的人工接受）→ 自动接入
         const wiring = await generateWiringDraft(unit, { mock }, group, "medium");
-        pipeline.log.push("  · 推理等级：medium（打包接线）");
+        pipeline.log.push("  · 推理等级：medium（自动接入）");
         pipeline.artifact = { wiring };
         pipeline.log.push(`  · 打包草稿：${wiring.source}；${mock ? wiring.preflight?.summary : "结构初审"}`);
         pipeline.step = "wiring";

@@ -5,10 +5,10 @@
  * ----------------------------------------------------------------------------
  * 从 ai-contract.mjs（CLI）中提取的纯函数集合：
  *   - listUnits / readUnitFiles     单元扫描与文件读取
- *   - generateDraft                  AI 生成契约草稿（真实 API 或演示 mock）
- *   - machineCheck                   机器初审（结构/端口引用/tsc）
- *   - freeze                         冻结（冻结记录 + git 提交）
- *   - runUnitTest                    运行单单元判据（vitest）
+ *   - generateDraft                  AI 生成功能规格草稿（真实 API 或演示 mock）
+ *   - machineCheck                   机器初审（结构/数据接口引用/tsc）
+ *   - freeze                         定稿（定稿记录 + git 提交）
+ *   - runUnitTest                    运行单单元验收测试（vitest）
  *   - buildTicketText                生成 AI ticket 文本
  *
  * 为什么单独成库：CLI（node 直跑）和管理界面（Hono 服务）必须共用
@@ -74,7 +74,7 @@ export const CONFIG_KEYS = [
   { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
   { key: "AI_MODEL", label: "AI 模型名（保存时自动从 API 获取列表）", secret: false, fallback: "deepseek-v4-flash", options: ["deepseek-v4-flash", "deepseek-v4-pro"] },
   { key: "AI_REASONING", label: "推理等级（low=快/省 high=深度推理）", secret: false, fallback: "medium", options: ["low", "medium", "high"] },
-  { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
+  { key: "PORT", label: "业务服务数据接口", secret: false, fallback: "3000" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ export const CONFIG_KEYS = [
 export const REVIEW_ITEMS = [
   "安全边界是否覆盖（防枚举/防注入/防重放/防爆破/限流）？",
   "每个失败路径都有错误码？",
-  "端口里有没有泄漏实现细节（ORM/HTTP/框架类型）？",
+  "数据接口里有没有泄漏实现细节（ORM/HTTP/框架类型）？",
   "不变量 ≥ 3 条，且每条可被测试断言？",
   "有没有【不】负责声明？",
   "输入 schema 够严（该枚举的枚举、该限长的限长）？",
@@ -119,21 +119,21 @@ function unitTemplates(name) {
   const P = pascal(name);
   return {
     "contract.ts": `/**
- * [角色] 功能单元：${name} —— 契约（冻结区）
- * 谁可以改：只有人（契约演进流程）。AI 实现任务中【禁止】修改本文件。
+ * [角色] 功能单元：${name} —— 功能规格（定稿区）
+ * 谁可以改：只有人（功能规格演进流程）。AI 实现任务中【禁止】修改本文件。
  * 填写指南：docs/contract-template.md（六要素）
  */
 
 import { z } from "zod";
 
-// TODO(人/契约设计师)：定义输入 schema（含边界规则，见模板第 2 节）
+// TODO(人/功能规格设计师)：定义输入 schema（含边界规则，见模板第 2 节）
 export const ${P}Input = z.object({
   // example: email: z.string().email(),
 });
 
 export type ${P}Input = z.infer<typeof ${P}Input>;
 
-// TODO：声明依赖端口（只允许纯数据 + 接口，禁止 ORM/HTTP/框架类型）
+// TODO：声明依赖数据接口（只允许纯数据 + 接口，禁止 ORM/HTTP/框架类型）
 export interface ${P}Deps {
   // example: users: UserStore;
 }
@@ -153,7 +153,7 @@ export interface ${P} {
  * 3. TODO
  */
 `,
-    "spec.md": `# 契约规格：${name}（v0.1-draft）
+    "spec.md": `# 功能规格规格：${name}（v0.1-draft）
 
 <!-- 按 docs/contract-template.md 六要素填写 -->
 
@@ -169,7 +169,7 @@ TODO
 ## 4. 错误码
 TODO
 
-## 5. 端口
+## 5. 数据接口
 TODO
 
 ## 6. 不变量 / 边界情况
@@ -179,7 +179,7 @@ TODO
     "impl.ts": `/**
  * [角色] 功能单元：${name} —— 实现（AI 写入区）
  * 本文件是单元内【唯一】允许 AI 修改的文件。
- * 当前为桩实现：判据是红的，交给 AI（或人）按契约填成真的。
+ * 当前为桩实现：验收测试是红的，交给 AI（或人）按功能规格填成真的。
  */
 
 import type { ${P} } from "./contract";
@@ -189,16 +189,16 @@ export const ${camel(name)}: ${P} = async (_input, _deps) => {
 };
 `,
     "impl.test.ts": `/**
- * [角色] 功能单元：${name} —— 判据（冻结区）
- * AI 的"完成标准"：AI 不得修改本文件（改了判据 = 作弊）。
- * TODO(人/契约评审)：契约冻结后，把不变量逐条翻译成测试。
+ * [角色] 功能单元：${name} —— 验收测试（定稿区）
+ * AI 的"完成标准"：AI 不得修改本文件（改了验收测试 = 作弊）。
+ * TODO(人/功能规格评审)：功能规格定稿后，把不变量逐条翻译成测试。
  * 全部使用内存适配器（src/groups/<组>/adapters/memory/**），不依赖基础设施。
  */
 
 import { describe, expect, it } from "vitest";
 import { ${camel(name)} } from "./impl";
 
-describe("${name} 单元判据", () => {
+describe("${name} 单元验收测试", () => {
   it("TODO: 不变量 1", async () => {
     // TODO: 组装内存适配器 → 调用 ${camel(name)} → 断言结果/错误码
     expect(true).toBe(true);
@@ -234,7 +234,7 @@ export function createUnit(name, group = GROUP) {
 const UNIT_FILES = { contract: "contract.ts", spec: "spec.md", impl: "impl.ts", test: "impl.test.ts" };
 
 /**
- * 保存单元文件（管理台编辑用）。人编辑冻结区文件是允许的，
+ * 保存单元文件（管理台编辑用）。人编辑定稿区文件是允许的，
  * 但每次保存必须 git 提交留痕（"谁在什么时候改了什么"可追溯）。
  * @returns {saved, committed, message}
  */
@@ -257,10 +257,10 @@ export function saveUnitFile(name, file, content, note = "", group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// 判据生成（Agent-B）与内置实现器（Agent-C 自动迭代）
+// 验收测试生成（Agent-B）与内置实现器（Agent-C 自动迭代）
 // ---------------------------------------------------------------------------
 
-/** 判据是否为"占位"（未真正写测试）：去掉注释后，仍含 expect(true) 或 TODO。 */
+/** 验收测试是否为"占位"（未真正写测试）：去掉注释后，仍含 expect(true) 或 TODO。 */
 export function isJudgePlaceholder(test) {
   if (!test) return true;
   // 去注释再判断——注释里出现"expect(true)"字样不应触发占位判定
@@ -273,17 +273,17 @@ export function isImplStub(impl) {
   return !impl || impl.includes("NOT_IMPLEMENTED");
 }
 
-/** 从契约文本里提取不变量条目（"N. 文本" 形式，供 mock 判据生成用）。 */
+/** 从功能规格文本里提取不变量条目（"N. 文本" 形式，供 mock 验收测试生成用）。 */
 function extractInvariants(contract) {
   const m = /不变量[^]*?\n\s*\*\/[^]*?\*\/|不变量[\s\S]*?\*\//.exec(contract ?? "");
   const block = m?.[0] ?? "";
   const items = [...block.matchAll(/\*\s*(\d+)\.\s*([^\n*]+)/g)].map((x) => x[2].trim());
-  return items.length ? items : ["（契约未写明不变量，请先评审契约）"];
+  return items.length ? items : ["（功能规格未写明不变量，请先评审功能规格）"];
 }
 
 /**
- * 生成判据草稿（Agent-B）并写入 impl.test.ts。
- * - 真实模式：调 API，按 04-judge-drafter.md 生成完整判据；
+ * 生成验收测试草稿（Agent-B）并写入 impl.test.ts。
+ * - 真实模式：调 API，按 04-judge-drafter.md 生成完整验收测试；
  * - mock 模式：生成"不变量驱动的测试骨架"——每条不变量一个 it，body 显式
  *   抛 TODO（必红，杜绝 expect(true) 假绿），供人逐条补全断言。
  */
@@ -291,10 +291,10 @@ export async function generateJudgeTest(name, mock = true, group = GROUP, reason
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
 
-  // 纪律守卫：已冻结的判据不允许被 AI 生成重写（改了判据 = 作弊）。
-  // 需要重写必须走契约演进流程（git 历史可追溯）。
-  if ((files.test ?? "").includes("冻结记录")) {
-    throw new Error("判据已冻结——不允许被 AI 生成覆盖。如需修改请走契约演进流程（人工编辑 + git 留痕）");
+  // 纪律守卫：已定稿的验收测试不允许被 AI 生成重写（改了验收测试 = 作弊）。
+  // 需要重写必须走功能规格演进流程（git 历史可追溯）。
+  if ((files.test ?? "").includes("定稿记录")) {
+    throw new Error("验收测试已定稿——不允许被 AI 生成覆盖。如需修改请走功能规格演进流程（人工编辑 + git 留痕）");
   }
   const contract = files.contract;
 
@@ -303,15 +303,15 @@ export async function generateJudgeTest(name, mock = true, group = GROUP, reason
     const items = extractInvariants(contract);
     const c = camel(name);
     test = `/**
- * [角色] 功能单元：${name} —— 判据（草稿，模拟 AI 生成，未冻结）
+ * [角色] 功能单元：${name} —— 验收测试（草稿，模拟 AI 生成，未定稿）
  * 每条不变量一个 it；body 为显式 TODO（必红），请逐条补全断言。
- * 判据作者（Agent-B）纪律：禁止占位断言、禁止改契约/实现。
+ * 验收测试作者（Agent-B）纪律：禁止占位断言、禁止改功能规格/实现。
  */
 
 import { describe, it, expect } from "vitest";
 import { ${c} } from "./impl";
 
-describe("${name} 单元判据", () => {
+describe("${name} 单元验收测试", () => {
 ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
     // TODO: 组装内存适配器 → 调用 ${c} → 断言「${inv}」
     throw new Error("TODO: 断言不变量${i + 1}（${inv}）");
@@ -338,33 +338,33 @@ ${items.map((inv, i) => `  it("不变量${i + 1}｜${inv}", async () => {
 }
 
 /**
- * 冻结判据：人确认后，在 impl.test.ts 头部写冻结记录 + git 提交。
- * 判据冻结后，实现者（Agent-C）才被允许对照它写 impl.ts。
- * 纪律：占位判据（含 TODO/expect(true)）不允许冻结——考卷没写完不许开考。
+ * 定稿验收测试：人确认后，在 impl.test.ts 头部写定稿记录 + git 提交。
+ * 验收测试定稿后，实现者（Agent-C）才被允许对照它写 impl.ts。
+ * 纪律：占位验收测试（含 TODO/expect(true)）不允许定稿——考卷没写完不许开考。
  */
 export function freezeJudge(name, reviewer = "管理台操作员", group = GROUP) {
   const path = join(unitDir(name, group), "impl.test.ts");
-  if (!existsSync(path)) throw new Error(`判据文件不存在: ${name}/impl.test.ts`);
+  if (!existsSync(path)) throw new Error(`验收测试文件不存在: ${name}/impl.test.ts`);
   if (isJudgePlaceholder(readFileSync(path, "utf8"))) {
-    throw new Error("判据仍是占位（含 TODO / expect(true)）——请先逐条补全真实断言，再冻结");
+    throw new Error("验收测试仍是占位（含 TODO / expect(true)）——请先逐条补全真实断言，再定稿");
   }
   const record = `/**
- * 冻结记录（判据）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后冻结。
- * 冻结后任何修改必须走契约演进流程（改了判据 = 作弊，git 历史可追溯）。
+ * 定稿记录（验收测试）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后定稿。
+ * 定稿后任何修改必须走功能规格演进流程（改了验收测试 = 作弊，git 历史可追溯）。
  */
 `;
   writeFileSync(path, record + readFileSync(path, "utf8"));
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
-  const commit = spawnSync("git", ["commit", "-q", "-m", `judge: ${name} 判据冻结（人确认）`], { cwd: ROOT });
-  return { committed: commit.status === 0, message: commit.status === 0 ? `已冻结并提交: ${name}/impl.test.ts` : "判据已写盘，git 提交失败" };
+  const commit = spawnSync("git", ["commit", "-q", "-m", `judge: ${name} 验收测试定稿（人确认）`], { cwd: ROOT });
+  return { committed: commit.status === 0, message: commit.status === 0 ? `已定稿并提交: ${name}/impl.test.ts` : "验收测试已写盘，git 提交失败" };
 }
 
 /**
  * 内置实现器（Agent-C 自动迭代）：
- * 读契约 + 判据 → 生成 impl.ts → 跑判据 → 红了带失败信息重试（≤ maxRounds）→
+ * 读功能规格 + 验收测试 → 生成 impl.ts → 跑验收测试 → 红了带失败信息重试（≤ maxRounds）→
  * 全绿才 git 提交；超限则停止并报告（失败安全：干不了就求援，绝不假装成功）。
  *
- * - 真实模式：调 API（03-unit-implementer 纪律），判据失败输出作为下一轮反馈；
+ * - 真实模式：调 API（03-unit-implementer 纪律），验收测试失败输出作为下一轮反馈；
  * - mock 模式：演示"迭代与失败安全"路径——每轮写一个带轮次的桩，必然红灯，
  *   演示读失败信息、重试、最终停手报告。
  */
@@ -372,18 +372,18 @@ export async function implementUnit(name, { mock = true, maxRounds = 5 } = {}, g
   const files = readUnitFiles(name, group);
   if (!files.contract) throw new Error(`功能单元不存在: ${group}/features/${name}`);
   if (isJudgePlaceholder(files.test)) {
-    throw new Error("判据尚未就绪（还是占位测试）——先写判据并确认，再让 AI 实现");
+    throw new Error("验收测试尚未就绪（还是占位测试）——先写验收测试并确认，再让 AI 实现");
   }
 
   const rounds = [];
   for (let round = 1; round <= maxRounds; round++) {
     // ① 生成实现
     if (mock) {
-      // mock 实现器：每轮写一个"看起来在努力"但故意不满足判据的桩，
+      // mock 实现器：每轮写一个"看起来在努力"但故意不满足验收测试的桩，
       // 用于演示"红灯 → 读失败 → 重试"循环与最终停手。
       const impl = `/**
  * [角色] 功能单元：${name} —— 实现（内置实现器 mock，第 ${round}/${maxRounds} 轮尝试）
- * 演示失败安全：此实现未满足判据，判据会红。
+ * 演示失败安全：此实现未满足验收测试，验收测试会红。
  */
 import { AppError, ErrorCodes } from "../../ports/errors";
 import type { ${pascal(name)} } from "./contract";
@@ -396,7 +396,7 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
     } else {
       const promptText = readFileSync(join(ROOT, "docs/agent-prompts/03-unit-implementer.md"), "utf8");
       const feedback = rounds.length
-        ? `\n\n【上一轮判据失败信息，请修正】\n${rounds[rounds.length - 1].summary}\n${rounds[rounds.length - 1].tail}`
+        ? `\n\n【上一轮验收测试失败信息，请修正】\n${rounds[rounds.length - 1].summary}\n${rounds[rounds.length - 1].tail}`
         : "";
       const system = promptText
         .replaceAll("{{FEATURE_NAME}}", name)
@@ -408,7 +408,7 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
       writeFileSync(join(unitDir(name, group), "impl.ts"), m[1]);
     }
 
-    // ② 跑判据
+    // ② 跑验收测试
     const result = runUnitTest(name);
     const summary = result.summary;
     const tail = result.output.slice(-1500);
@@ -417,36 +417,36 @@ export const ${camel(name)}: ${pascal(name)} = async (_input, _deps) => {
     if (result.ok) {
       // ③ 全绿 → 提交
       spawnSync("git", ["add", "-A"], { cwd: ROOT });
-      spawnSync("git", ["commit", "-q", "-m", `feat(${name}): implement（内置实现器，${round}/${maxRounds} 轮判据全绿）`], { cwd: ROOT });
-      return { ok: true, rounds, message: `判据全绿（第 ${round} 轮），已提交实现` };
+      spawnSync("git", ["commit", "-q", "-m", `feat(${name}): implement（内置实现器，${round}/${maxRounds} 轮验收测试全绿）`], { cwd: ROOT });
+      return { ok: true, rounds, message: `验收测试全绿（第 ${round} 轮），已提交实现` };
     }
   }
 
   return {
     ok: false,
     rounds,
-    message: `达到最大迭代 ${maxRounds} 轮仍未通过判据——停手，需人工介入（这是失败安全，不是假装成功）`,
+    message: `达到最大迭代 ${maxRounds} 轮仍未通过验收测试——停手，需人工介入（这是失败安全，不是假装成功）`,
   };
 }
 
 /**
- * 单元状态聚合（供开发向导）：契约冻结 / 判据就绪 / 实现完成 / 接线 / 上线。
+ * 单元状态聚合（供开发向导）：功能规格定稿 / 验收测试就绪 / 实现完成 / 接入 / 上线。
  */
 export function unitStatus(name, group = GROUP) {
   const files = readUnitFiles(name, group);
   if (!files.contract) return null;
-  const frozen = (files.contract ?? "").includes("冻结记录");
+  const frozen = (files.contract ?? "").includes("定稿记录");
   const judgePlaceholder = isJudgePlaceholder(files.test);
-  const judgeFrozen = (files.test ?? "").includes("冻结记录");
+  const judgeFrozen = (files.test ?? "").includes("定稿记录");
   const implStub = isImplStub(files.impl);
   const wiring = checkWiring(name, group);
   const test = runUnitTest(name, group);
 
   const steps = [
-    { id: "contract", label: "① 契约冻结", done: frozen, hint: frozen ? "已冻结" : "契约尚未冻结（走 AI 生成 + 人评审）" },
-    { id: "judge", label: "② 判据就绪", done: judgeFrozen && !judgePlaceholder, hint: judgeFrozen ? "判据已冻结" : judgePlaceholder ? "判据还是占位（需 AI 生成 + 人确认）" : "判据已写但未冻结" },
-    { id: "impl", label: "③ 实现完成", done: !implStub && test.ok, hint: implStub ? "实现还是桩（需 AI 实现）" : test.ok ? "实现完成且判据绿" : "实现已写但判据红" },
-    { id: "wiring", label: "④ 接线完成", done: wiring.allOk, hint: wiring.allOk ? "已接线" : `接线缺口 ${wiring.checks.filter((x) => !x.ok).length} 项` },
+    { id: "contract", label: "① 功能规格定稿", done: frozen, hint: frozen ? "已定稿" : "功能规格尚未定稿（走 AI 生成 + 人评审）" },
+    { id: "judge", label: "② 验收测试就绪", done: judgeFrozen && !judgePlaceholder, hint: judgeFrozen ? "验收测试已定稿" : judgePlaceholder ? "验收测试还是占位（需 AI 生成 + 人确认）" : "验收测试已写但未定稿" },
+    { id: "impl", label: "③ 实现完成", done: !implStub && test.ok, hint: implStub ? "实现还是桩（需 AI 实现）" : test.ok ? "实现完成且验收测试绿" : "实现已写但验收测试红" },
+    { id: "wiring", label: "④ 接入完成", done: wiring.allOk, hint: wiring.allOk ? "已接入" : `接入缺口 ${wiring.checks.filter((x) => !x.ok).length} 项` },
     { id: "ship", label: "⑤ 上线就绪", done: false, hint: "跑总闸确认（tsc + 全部测试）" },
   ];
 
@@ -466,7 +466,7 @@ export function unitStatus(name, group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// 一键接线（组合根/HTTP/manifest 的改动由机器生成，人审 diff 后才落盘）
+// 一键接入（组合根/HTTP/manifest 的改动由机器生成，人审 diff 后才落盘）
 // ---------------------------------------------------------------------------
 
 /** 在 content 中 anchor 行之后插入 toInsert；找不到 anchor 返回 null。 */
@@ -477,14 +477,14 @@ function insertAfter(content, anchor, toInsert) {
   return content.slice(0, end) + "\n" + toInsert + content.slice(end);
 }
 
-/** 从契约文本提取 Deps 接口的字段名（AuthDeps 字段命名一致，可直接映射）。 */
+/** 从功能规格文本提取 Deps 接口的字段名（AuthDeps 字段命名一致，可直接映射）。 */
 function extractDepsFields(contract) {
   const m = /interface \w+Deps \{([\s\S]*?)\n\}/.exec(contract ?? "");
   if (!m) return [];
   return [...m[1].matchAll(/^\s*(\w+):/gm)].map((x) => x[1]);
 }
 
-/** 从契约文本提取输入 schema 字段名（用于判断是否走 cookie + body 字段）。 */
+/** 从功能规格文本提取输入 schema 字段名（用于判断是否走 cookie + body 字段）。 */
 function extractInputFields(contract) {
   const m = /z\.object\(\{([\s\S]*?)\n\}\)/.exec(contract ?? "");
   if (!m) return [];
@@ -511,7 +511,7 @@ function simpleDiff(before, after) {
 }
 
 /**
- * 生成接线 diff（不落盘）：读契约推断依赖与输入，生成三处改动（index.ts /
+ * 生成接入 diff（不落盘）：读功能规格推断依赖与输入，生成三处改动（index.ts /
  * http.ts / manifest.json）的 before/after + 行级 diff，供人审阅。
  * @returns { alreadyWired, files: [{path, before, after, diffText}] }
  */
@@ -558,7 +558,7 @@ export function generateWiring(name, group = GROUP) {
 import type { ${P}Deps } from "./features/${name}/contract";
 import { ${P}Input } from "./features/${name}/contract";`;
       next = insertAfter(next, `import type { AppConfig } from "./config";`, imports);
-      // 顺序重要：先插方法声明、再插 toXDeps（锚定完整 createApp 块，不受前序插入影响）、最后插接线
+      // 顺序重要：先插方法声明、再插 toXDeps（锚定完整 createApp 块，不受前序插入影响）、最后插接入
       next = insertAfter(next, `  health(): { ok: boolean };`,
         `  ${c}(input: unknown): Promise<void>;`);
       const appBlock = `export function createApp(deps: GroupDeps): GroupApi {
@@ -615,13 +615,13 @@ ${callLine}
 }
 
 /**
- * 应用接线：把 generateWiring 生成的 after 写盘 + git 提交。
+ * 应用接入：把 generateWiring 生成的 after 写盘 + git 提交。
  * 人看完 diff 点"确认"才调用——落盘权在人。
  */
 export function applyWiring(name, note = "", group = GROUP) {
   const { alreadyWired, files } = generateWiring(name, group);
-  if (alreadyWired) return { ok: true, message: "该单元已接线，无需改动", applied: 0 };
-  if (!files.length) return { ok: false, message: "未能生成接线改动（锚点缺失或已接线），请人工检查", applied: 0 };
+  if (alreadyWired) return { ok: true, message: "该单元已接入，无需改动", applied: 0 };
+  if (!files.length) return { ok: false, message: "未能生成接入改动（锚点缺失或已接入），请人工检查", applied: 0 };
 
   for (const f of files) {
     // f.path 相对服务组目录（如 "index.ts" / "adapters/http.ts" / "manifest.json"）
@@ -629,18 +629,18 @@ export function applyWiring(name, note = "", group = GROUP) {
     writeFileSync(full, f.after);
   }
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
-  const commit = spawnSync("git", ["commit", "-q", "-m", `wire(${name}): 一键接线（人确认）${note ? " — " + note : ""}`], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `wire(${name}): 一键接入（人确认）${note ? " — " + note : ""}`], { cwd: ROOT });
   return {
     ok: commit.status === 0,
     applied: files.length,
     message: commit.status === 0
-      ? `已接线 ${files.length} 个文件并提交（${files.map((f) => f.path).join(", ")}）`
+      ? `已接入 ${files.length} 个文件并提交（${files.map((f) => f.path).join(", ")}）`
       : `文件已写盘（${files.map((f) => f.path).join(", ")}），git 提交失败`,
   };
 }
 
 /**
- * 检查新单元是否已"接线"进服务：组合根 import / AuthApi / createAuthApp /
+ * 检查新单元是否已"接入"进服务：组合根 import / AuthApi / createAuthApp /
  * HTTP 路由 / manifest 版本。机器检查、人动手——组合根仍由人编辑。
  */
 export function checkWiring(name, group = GROUP) {
@@ -651,9 +651,9 @@ export function checkWiring(name, group = GROUP) {
 
   const checks = [
     { label: `index.ts 已 import 实现 (features/${name}/impl)`, ok: index.includes(`features/${name}/impl`) },
-    { label: `index.ts 已 import 契约 (features/${name}/contract)`, ok: index.includes(`features/${name}/contract`) },
+    { label: `index.ts 已 import 功能规格 (features/${name}/contract)`, ok: index.includes(`features/${name}/contract`) },
     { label: "AuthApi 已声明操作方法", ok: index.includes(`${c}(input: unknown)`) || index.includes(`${c}: (`) },
-    { label: "createAuthApp 已接线（parseOrThrow + 注入）", ok: index.includes(`${c}: (input) => ${c}(`) },
+    { label: "createAuthApp 已接入（parseOrThrow + 注入）", ok: index.includes(`${c}: (input) => ${c}(`) },
     { label: "HTTP 路由已添加（adapters/http.ts）", ok: http.includes(`/api/${name}`) },
     { label: "manifest.json 已登记版本", ok: manifest.includes(`"${name}"`) },
   ];
@@ -695,7 +695,7 @@ export function readUnitFiles(name, group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// ① AI 生成契约草稿
+// ① AI 生成功能规格草稿
 // ---------------------------------------------------------------------------
 
 /** 组装给 AI 的 prompt：Agent-A 角色设定 + 六要素模板 + 本次需求。 */
@@ -707,13 +707,13 @@ function buildPrompt(name, requirement) {
   const template = readFileSync(join(ROOT, "docs/contract-template.md"), "utf8");
   return {
     system: `${drafter}\n\n【六要素模板（必须严格遵循）】\n${template}`,
-    user: `请为功能单元「${name}」生成契约。\n需求：${requirement}\n\n只输出两个代码块，不要输出任何其他文字：\n第一个代码块标记为 ts（contract.ts 的完整内容），第二个代码块标记为 md（spec.md 的完整内容）。`,
+    user: `请为功能单元「${name}」生成功能规格。\n需求：${requirement}\n\n只输出两个代码块，不要输出任何其他文字：\n第一个代码块标记为 ts（contract.ts 的完整内容），第二个代码块标记为 md（spec.md 的完整内容）。`,
   };
 }
 
 /** 内置模拟 AI：生成一份"典型第一版草稿"——结构齐全但带着真实缺陷，供评审环节抓问题。 */
 export function mockDraft(name, requirement, group = GROUP) {
-  // 只引用目标组里真实存在的端口（新组只有 errors/logger，避免硬编码 auth 端口）
+  // 只引用目标组里真实存在的数据接口（新组只有 errors/logger，避免硬编码 auth 数据接口）
   const portsDir = join(GROUPS_DIR, group, "ports");
   const has = (f) => existsSync(join(portsDir, f));
   const imports = [];
@@ -725,7 +725,7 @@ export function mockDraft(name, requirement, group = GROUP) {
   depFields.push("  logger: Logger;");
 
   const ts = `/**
- * [角色] 功能单元：${name} —— 契约（草稿 v0.1，模拟 AI 生成，未冻结）
+ * [角色] 功能单元：${name} —— 功能规格（草稿 v0.1，模拟 AI 生成，未定稿）
  */
 
 import { z } from "zod";
@@ -751,7 +751,7 @@ export interface ${pascal(name)} {
  * 1. token 有效时执行操作
  */
 `;
-  const md = `# 契约规格：${name}（v0.1-draft，模拟 AI 生成）
+  const md = `# 功能规格规格：${name}（v0.1-draft，模拟 AI 生成）
 
 ## 1. 一句话目标
 ${requirement}
@@ -766,7 +766,7 @@ ${requirement}
 ## 4. 错误码
 （待补）
 
-## 5. 端口
+## 5. 数据接口
 - users: UserStore
 - sessions: SessionStore
 - logger: Logger
@@ -777,7 +777,7 @@ ${requirement}
   return { ts, md };
 }
 
-/** 调用 OpenAI 兼容 API 生成契约（真实模式）。 */
+/** 调用 OpenAI 兼容 API 生成功能规格（真实模式）。 */
 async function callLLM(prompt, opts = {}) {
   // 优先级：调用方指定等级 > 本地配置 > 环境变量 > 默认值
   const key = resolveConfigValue("AI_API_KEY");
@@ -838,7 +838,7 @@ function parseBlocks(text) {
 }
 
 /**
- * 生成契约草稿并写入单元目录。
+ * 生成功能规格草稿并写入单元目录。
  * @param name        功能单元名（需先 feat new）
  * @param requirement 一句话需求
  * @param mock        演示模式（不调 API）
@@ -849,9 +849,9 @@ export async function generateDraft(name, requirement, mock = true, group = GROU
   if (!existsSync(join(dir, "contract.ts"))) {
     throw new Error(`功能单元不存在: ${group}/features/${name}（请先执行 feat new ${name}）`);
   }
-  // 纪律守卫：已冻结的契约不允许被 AI 生成重写（与判据/端口守卫一致）
-  if (readFileSync(join(dir, "contract.ts"), "utf8").includes("冻结记录")) {
-    throw new Error(`契约已冻结（${group}/features/${name}）——不允许被 AI 生成覆盖，请走契约演进流程`);
+  // 纪律守卫：已定稿的功能规格不允许被 AI 生成重写（与验收测试/数据接口守卫一致）
+  if (readFileSync(join(dir, "contract.ts"), "utf8").includes("定稿记录")) {
+    throw new Error(`功能规格已定稿（${group}/features/${name}）——不允许被 AI 生成覆盖，请走功能规格演进流程`);
   }
 
   let ts, md, source;
@@ -877,11 +877,11 @@ export async function generateDraft(name, requirement, mock = true, group = GROU
 // ---------------------------------------------------------------------------
 
 /**
- * 机器初审：结构检查 + 端口引用存在性 + tsc 全项目类型检查。
+ * 机器初审：结构检查 + 数据接口引用存在性 + tsc 全项目类型检查。
  * @returns {checks: [{label, ok}], tsc: {ok, unitErrors: string[]}}
  */
 export function machineCheck(name, ts, md, group = GROUP) {
-  // 统计契约注释里的编号不变量条目（"1. " 形式）——真实 AI 按编号写，mock 只有 1 条
+  // 统计功能规格注释里的编号不变量条目（"1. " 形式）——真实 AI 按编号写，mock 只有 1 条
   const invariantCount = [...(ts ?? "").matchAll(/^\s*\*\s*\d+\.\s/gm)].length;
   const checks = [
     { label: "结构：包含 z.object 输入 schema", ok: ts.includes("z.object") },
@@ -889,11 +889,11 @@ export function machineCheck(name, ts, md, group = GROUP) {
     { label: "结构：spec 含错误码与不变量章节", ok: md.includes("## 4. 错误码") && md.includes("## 6. 不变量") },
   ];
 
-  // 端口引用检查：解析草稿里 import 的 ports 相对路径，验证对应文件真实存在
+  // 数据接口引用检查：解析草稿里 import 的 ports 相对路径，验证对应文件真实存在
   const portRefs = [...ts.matchAll(/from "((?:\.\.\/)+ports\/[a-z-]+)"/g)].map((m) => m[1]);
   const portsDir = join(GROUPS_DIR, group, "ports");
   checks.push({
-    label: `端口引用：${portRefs.length ? portRefs.join(", ") : "(无)"} 均存在`,
+    label: `数据接口引用：${portRefs.length ? portRefs.join(", ") : "(无)"} 均存在`,
     ok: portRefs.every((p) => {
       const segments = p.split("/").filter((s) => s !== "..");
       return existsSync(join(portsDir, segments[segments.length - 1] + ".ts"));
@@ -914,11 +914,11 @@ export function machineCheck(name, ts, md, group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// ④ 冻结（写入冻结记录 + git 提交）
+// ④ 定稿（写入定稿记录 + git 提交）
 // ---------------------------------------------------------------------------
 
 /**
- * 评审通过后冻结契约：文件头部写入冻结记录，并 git 提交。
+ * 评审通过后定稿功能规格：文件头部写入定稿记录，并 git 提交。
  * @param meta {generation, reviewer, approved, notes}
  * @returns {committed, message}
  */
@@ -928,20 +928,20 @@ export function freeze(name, meta = {}, group = GROUP) {
   const original = readFileSync(contractPath, "utf8");
 
   const freezeRecord = `/**
- * 冻结记录（机器生成，勿手改）：
+ * 定稿记录（机器生成，勿手改）：
  *   - 生成方式: ${meta.generation ?? "未知"}
  *   - 评审人: ${meta.reviewer ?? "未知评审人"}（人，${new Date().toISOString().slice(0, 10)}）
  *   - 评审结果: ${meta.approved ?? "?"} 项通过
- *   - 冻结后任何修改必须走契约演进流程
+ *   - 定稿后任何修改必须走功能规格演进流程
  */
 `;
 
   writeFileSync(contractPath, freezeRecord + original);
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
-  const commit = spawnSync("git", ["commit", "-q", "-m", `contract: ${name} 冻结（${meta.generation ?? ""} + 人评审 ${meta.approved ?? "?"}/10 通过）`], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `contract: ${name} 定稿（${meta.generation ?? ""} + 人评审 ${meta.approved ?? "?"}/10 通过）`], { cwd: ROOT });
   return {
     committed: commit.status === 0,
-    message: commit.status === 0 ? `已冻结并提交: contract: ${name}` : `冻结记录已写入文件，但 git 提交失败：${commit.stderr?.toString().trim() || "无变更可提交"}`,
+    message: commit.status === 0 ? `已定稿并提交: contract: ${name}` : `定稿记录已写入文件，但 git 提交失败：${commit.stderr?.toString().trim() || "无变更可提交"}`,
   };
 }
 
@@ -949,10 +949,10 @@ export function freeze(name, meta = {}, group = GROUP) {
 // 测试运行
 // ---------------------------------------------------------------------------
 
-/** 运行单单元判据（vitest 单文件），返回结构化结果。 */
+/** 运行单单元验收测试（vitest 单文件），返回结构化结果。 */
 export function runUnitTest(name, group = GROUP) {
   const file = join(unitDir(name, group), "impl.test.ts");
-  if (!existsSync(file)) return { ok: false, summary: "无判据文件", output: "" };
+  if (!existsSync(file)) return { ok: false, summary: "无验收测试文件", output: "" };
 
   const r = spawnSync("npx", ["vitest", "run", file], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
   const output = r.stdout + r.stderr;
@@ -1003,7 +1003,7 @@ export function readSourceFile(relPath, group = GROUP) {
   return readFileSync(target, "utf8");
 }
 
-/** 列出可浏览的源码文件清单（端口/适配器/组合根等）。 */
+/** 列出可浏览的源码文件清单（数据接口/适配器/组合根等）。 */
 export function listSourceFiles(group = GROUP) {
   const root = join(GROUPS_DIR, group);
   const out = [];
@@ -1020,7 +1020,7 @@ export function listSourceFiles(group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// P2：回滚 / 端口依赖矩阵 / 错误码一致性检查
+// P2：回滚 / 数据接口依赖矩阵 / 错误码一致性检查
 // ---------------------------------------------------------------------------
 
 /** 单元最近提交历史（git log，最多 10 条）。 */
@@ -1048,7 +1048,7 @@ export function rollbackUnit(name, commitHash, group = GROUP) {
   return { ok: false, message: `回滚失败：${err}` };
 }
 
-/** 端口依赖矩阵：每个单元 import 了哪些 ports（解析契约的 import）。 */
+/** 数据接口依赖矩阵：每个单元 import 了哪些 ports（解析功能规格的 import）。 */
 export function portDependencyMap(group = GROUP) {
   const units = listUnits(group).map((name) => {
     const contract = readUnitFiles(name, group).contract ?? "";
@@ -1060,7 +1060,7 @@ export function portDependencyMap(group = GROUP) {
 }
 
 /**
- * 错误码一致性检查（契约 vs 实现 vs 定义）：
+ * 错误码一致性检查（功能规格 vs 实现 vs 定义）：
  *  - spec 第 4 节声明的错误码是否都在 ports/errors.ts 定义；
  *  - impl 实际抛出的错误码是否都在 spec 声明（防"实现漏了失败路径/加了未声明错误"）。
  */
@@ -1077,7 +1077,7 @@ export function checkErrorCodes(name, group = GROUP) {
   // INVALID_INPUT 由组合根 zod 边界兜底抛出（单元内部假定输入已合法）——不算单元漏抛
   const boundaryCodes = ["INVALID_INPUT"];
   const problems = [];
-  if (!declared.length) problems.push("spec 第 4 节未声明任何错误码（契约不完整）");
+  if (!declared.length) problems.push("spec 第 4 节未声明任何错误码（功能规格不完整）");
   if (!thrown.length && !isImplStub(files.impl)) problems.push("impl 未抛出任何 AppError（可能漏了全部失败路径）");
   if (isImplStub(files.impl)) problems.push("impl 还是桩（NOT_IMPLEMENTED），错误路径未实现");
   problems.push(
@@ -1101,16 +1101,16 @@ export function checkErrorCodes(name, group = GROUP) {
 // 新建服务组（P2 多组支持：src/groups/ 下每个含 features/ 的目录即一个组）
 // ---------------------------------------------------------------------------
 
-/** 新组组合根骨架（空 API；加第一个功能单元时参照 auth-service 接线）。 */
+/** 新组组合根骨架（空 API；加第一个功能单元时参照 auth-service 接入）。 */
 const NEW_GROUP_INDEX = (name) => `/**
  * ============================================================================
  * [角色] 组合根：${name} —— 骨架（人维护，AI 禁止触碰）
  * ----------------------------------------------------------------------------
  * 新组从空 API 开始。接入第一个功能单元时：
- *   1. 参照 auth-service/index.ts 的接线模式（import → AuthApi → createApp → toXDeps）；
- *   2. 管理台「一键接线」的锚点目前面向 auth-service——新组第一个单元请人工接线，
+ *   1. 参照 auth-service/index.ts 的接入模式（import → AuthApi → createApp → toXDeps）；
+ *   2. 管理台「一键接入」的锚点目前面向 auth-service——新组第一个单元请人工接入，
  *      之后可扩展锚点支持多组；
- *   3. 接线完跑总闸（npm run check）确认。
+ *   3. 接入完跑总闸（npm run check）确认。
  * ============================================================================
  */
 
@@ -1151,11 +1151,11 @@ export function createApp(deps: GroupDeps): GroupApi {
 `;
 
 /** 新组配置骨架（fail fast；与管理台本地配置兼容）。 */
-/** 新组 HTTP 壳（含打包生成路由所需的助手）。 */
+/** 新组 HTTP 壳（含接入生成路由所需的助手）。 */
 const NEW_GROUP_HTTP = `/**
  * [角色] 适配器：http —— 薄 HTTP 层（全组唯一接触 Web 框架的地方）
- * 空框架壳：业务路由由 Agent-E 打包时插入（锚点：\`return app;\` 之前）。
- * 助手（readJson / cookie / ErrorCodes）已就位——打包生成的路由直接可编译。
+ * 空框架壳：业务路由由 Agent-E 接入时插入（锚点：\`return app;\` 之前）。
+ * 助手（readJson / cookie / ErrorCodes）已就位——接入生成的路由直接可编译。
  */
 
 import { Hono } from "hono";
@@ -1164,7 +1164,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { AppError, ErrorCodes } from "../ports/errors";
 import type { GroupApi } from "../index";
 
-/** 会话 cookie 名（打包生成的"从 cookie 取 token"路由使用）。 */
+/** 会话 cookie 名（接入生成的"从 cookie 取 token"路由使用）。 */
 export const SESSION_COOKIE = "sid";
 
 /** 读取并解析 JSON body；非法 JSON → INVALID_INPUT。 */
@@ -1189,7 +1189,7 @@ export function createHttpApp(api: GroupApi): Hono {
 
   app.get("/api/health", (c) => c.json(api.health()));
 
-  // ← 打包插入点：Agent-E 生成的路由会加在这里（\`return app;\` 之前）
+  // ← 接入插入点：Agent-E 生成的路由会加在这里（\`return app;\` 之前）
   return app;
 }
 `;
@@ -1204,7 +1204,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const EnvSchema = z.object({
-  /** 业务服务端口。 */
+  /** 业务服务数据接口。 */
   PORT: z.coerce.number().int().positive().default(3000),
 });
 
@@ -1238,15 +1238,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 }
 `;
 
-/** 新组判据占位（第一个功能单元接线后替换为真实端到端用例）。 */
+/** 新组验收测试占位（第一个功能单元接入后替换为真实端到端用例）。 */
 const NEW_GROUP_TEST = (name) => `/**
- * [角色] 组判据：${name} —— 组合判据（占位）
- * 注意：这是"假绿"占位——第一个功能单元接线后，请替换为真实的端到端用例。
+ * [角色] 组验收测试：${name} —— 组合验收测试（占位）
+ * 注意：这是"假绿"占位——第一个功能单元接入后，请替换为真实的端到端用例。
  */
 
 import { describe, expect, it } from "vitest";
 
-describe("${name} 组判据", () => {
+describe("${name} 组验收测试", () => {
   it("占位：等待第一个功能单元", () => {
     expect(true).toBe(true);
   });
@@ -1255,7 +1255,7 @@ describe("${name} 组判据", () => {
 
 /**
  * 创建服务组：src/groups/<name>/ 骨架。
- * 从 auth-service 复制通用端口（errors/logger），生成组合根/配置/manifest/组判据。
+ * 从 auth-service 复制通用数据接口（errors/logger），生成组合根/配置/manifest/组验收测试。
  * @param name kebab-case 组名（如 order-service）
  */
 export function createGroup(name) {
@@ -1271,7 +1271,7 @@ export function createGroup(name) {
   mkdirSync(join(dir, "ports"), { recursive: true });
   mkdirSync(join(dir, "adapters"), { recursive: true });
 
-  // 通用端口从 auth-service 复制（错误协议与日志端口全组一致，保证错误码/日志语义统一）
+  // 通用数据接口从 auth-service 复制（错误协议与日志数据接口全组一致，保证错误码/日志语义统一）
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "errors.ts"), join(dir, "ports", "errors.ts"));
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "logger.ts"), join(dir, "ports", "logger.ts"));
 
@@ -1303,24 +1303,24 @@ export function createGroup(name) {
 }
 
 // ---------------------------------------------------------------------------
-// 端口统一管理（列表/依赖/适配器/新建）
+// 数据接口统一管理（列表/依赖/适配器/新建）
 // ---------------------------------------------------------------------------
 
-/** 从端口文件头提取"一句话：..."用途描述。 */
+/** 从数据接口文件头提取"一句话：..."用途描述。 */
 function portDescription(content) {
   const m = /一句话[:：]\s*([^\n*]+)/.exec(content ?? "");
   return m ? m[1].trim() : "（未写用途说明）";
 }
 
 /**
- * 端口列表：扫描 ports/ 目录，汇总每个端口的
+ * 数据接口列表：扫描 ports/ 目录，汇总每个数据接口的
  * 一句话用途 / 依赖它的单元 / 实现了它的适配器。
  */
 export function portList(group = GROUP) {
   const portsDir = join(GROUPS_DIR, group, "ports");
   if (!existsSync(portsDir)) return { group, ports: [] };
 
-  // 单元 → 端口 反向依赖
+  // 单元 → 数据接口 反向依赖
   const unitPorts = listUnits(group).map((u) => ({
     unit: u,
     ports: [...(readUnitFiles(u, group).contract ?? "").matchAll(/from "(?:\.\.\/)+ports\/([a-z-]+)"/g)].map((m) => m[1]),
@@ -1363,36 +1363,36 @@ export function portList(group = GROUP) {
 }
 
 /**
- * 新建端口：ports/<name>.ts 接口模板（冻结区——人创建，AI 不许碰）。
- * @param name kebab-case 端口名（如 token-verifier）
+ * 新建数据接口：ports/<name>.ts 接口模板（定稿区——人创建，AI 不许碰）。
+ * @param name kebab-case 数据接口名（如 token-verifier）
  * @param description 一句话用途（写入文件头）
  */
 export function createPort(name, description, group = GROUP) {
   if (!/^[a-z0-9-]+$/.test(name)) {
-    throw new Error("端口名只允许小写字母、数字、连字符（kebab-case）");
+    throw new Error("数据接口名只允许小写字母、数字、连字符（kebab-case）");
   }
   const P = pascal(name);
   const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
   if (existsSync(path)) {
-    throw new Error(`端口已存在: ${group}/ports/${name}.ts`);
+    throw new Error(`数据接口已存在: ${group}/ports/${name}.ts`);
   }
   const content = `/**
  * ============================================================================
- * [角色] 端口：${P} —— ${description ?? "（待补用途说明）"}
+ * [角色] 数据接口：${P} —— ${description ?? "（待补用途说明）"}
  * ----------------------------------------------------------------------------
- * 谁可以改：只有人（契约演进流程）。AI 实现任务中禁止修改本文件。
+ * 谁可以改：只有人（功能规格演进流程）。AI 实现任务中禁止修改本文件。
  * 纪律：
- *   - 只允许纯数据 + 接口，禁止任何实现代码（这是端口，不是实现）；
+ *   - 只允许纯数据 + 接口，禁止任何实现代码（这是数据接口，不是实现）；
  *   - 禁止引入 ORM / HTTP / 框架类型；
  *   - 语义必须能被内存适配器完整模拟（否则单元无法独立测试）；
  *   - 不可控因素（时钟/随机数）设计成注入，测试才能固定时间。
  * ============================================================================
  */
 
-// TODO(人/契约设计师)：定义端口接口。示例：
+// TODO(人/功能规格设计师)：定义数据接口接口。示例：
 //   findByEmail(email: string): Promise<Xxx | null>;
 export interface ${P} {
-  // 待填：端口方法（语义见文件头"一句话"）
+  // 待填：数据接口方法（语义见文件头"一句话"）
 }
 `;
   writeFileSync(path, content);
@@ -1400,7 +1400,7 @@ export interface ${P} {
 }
 
 // ---------------------------------------------------------------------------
-// 端口作者（Agent-D）：AI 生成端口接口 → 机器初审 → 人确认冻结
+// 数据接口作者（Agent-D）：AI 生成数据接口接口 → 机器初审 → 人确认定稿
 // ---------------------------------------------------------------------------
 
 /**
@@ -1424,11 +1424,11 @@ function methodsWithoutDocs(content) {
 }
 
 /**
- * 从端口描述提取语义，建议贴合的方法骨架（mock 模式用）。
+ * 从数据接口描述提取语义，建议贴合的方法骨架（mock 模式用）。
  * 关键词 → 方法模板；默认给 CRUD 骨架。返回 [{ sig, doc }]。
  */
 /**
- * 从端口描述提取语义，建议贴合的方法骨架（mock 模式用）。
+ * 从数据接口描述提取语义，建议贴合的方法骨架（mock 模式用）。
  * 关键词 → 方法模板；默认给 CRUD 骨架。
  * 返回 [{ sig, doc, types? }]——types 为方法引用的内联类型定义（保证草稿可编译）。
  */
@@ -1483,9 +1483,9 @@ function nonPromiseMethodCount(content) {
 }
 
 /**
- * 端口机器初审（纪律检查）：
+ * 数据接口机器初审（纪律检查）：
  *  - 纯接口（有 export interface，无 class）；
- *  - 零基础设施 import（端口接口不得依赖任何外部包）；
+ *  - 零基础设施 import（数据接口接口不得依赖任何外部包）；
  *  - 有一句话用途；方法均为 Promise 返回；每个方法带 JSDoc。
  */
 export function machineCheckPort(content) {
@@ -1493,7 +1493,7 @@ export function machineCheckPort(content) {
   const checks = [
     { label: "结构：包含 export interface", ok: /export\s+interface\s+\w+/.test(content) },
     { label: "纪律：无实现代码（无 class / 无方法体）", ok: !/class\s+\w+/.test(content) && !/=>\s*\{/.test(content) && !/\)\s*\{[\s\S]*\}/.test(content) },
-    { label: "纪律：零 import（端口接口不依赖任何外部包）", ok: !/^\s*import\s/m.test(content) },
+    { label: "纪律：零 import（数据接口接口不依赖任何外部包）", ok: !/^\s*import\s/m.test(content) },
     { label: "纪律：无基础设施字样（pg/redis/express/knex…）", ok: !/\b(pg|redis|express|knex|prisma|mongoose|mysql)\b/i.test(content) },
     { label: "结构：有一句话用途", ok: /一句话[:：]/.test(content) },
     { label: `惯例：方法返回 Promise${nonPromiseMethodCount(content) ? `（${nonPromiseMethodCount(content)} 个非异步方法）` : ""}`, ok: nonPromiseMethodCount(content) === 0 },
@@ -1503,18 +1503,18 @@ export function machineCheckPort(content) {
 }
 
 /**
- * 生成端口草稿（Agent-D）并写入 ports/<name>.ts。
+ * 生成数据接口草稿（Agent-D）并写入 ports/<name>.ts。
  * - mock 模式：内置"带典型缺陷的草稿"（泄漏实现/同步返回/缺语义注释），供评审抓；
  * - 真实模式：调 API（05-port-drafter.md 纪律）。
- * 守卫：已冻结的端口不允许被 AI 重写（冻结区纪律）。
+ * 守卫：已定稿的数据接口不允许被 AI 重写（定稿区纪律）。
  */
 export async function generatePort(name, description, mock = true, group = GROUP, reasoning) {
-  if (!/^[a-z0-9-]+$/.test(name)) throw new Error("端口名只允许小写字母、数字、连字符（kebab-case）");
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error("数据接口名只允许小写字母、数字、连字符（kebab-case）");
   const P = pascal(name);
   const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
 
-  if (existsSync(path) && readFileSync(path, "utf8").includes("冻结记录")) {
-    throw new Error(`端口已冻结（${group}/ports/${name}.ts）——不允许被 AI 生成覆盖，请走契约演进流程`);
+  if (existsSync(path) && readFileSync(path, "utf8").includes("定稿记录")) {
+    throw new Error(`数据接口已定稿（${group}/ports/${name}.ts）——不允许被 AI 生成覆盖，请走功能规格演进流程`);
   }
 
   let content;
@@ -1524,11 +1524,11 @@ export async function generatePort(name, description, mock = true, group = GROUP
     // 重要：草稿必须可编译（类型内联、违规 import 注释化），否则会破坏 tsc 总闸。
     const { methods, types } = suggestMethods(description);
     content = `/**
- * [角色] 端口：${P} —— 草稿 v0.1（模拟 AI 生成，未冻结）
+ * [角色] 数据接口：${P} —— 草稿 v0.1（模拟 AI 生成，未定稿）
  * 一句话：${description ?? "（待补用途说明）"}
  */
 
-// ⚠️ 缺陷：端口接口禁止依赖具体存储（实现细节泄漏）——以下 import 不允许出现在最终版本
+// ⚠️ 缺陷：数据接口接口禁止依赖具体存储（实现细节泄漏）——以下 import 不允许出现在最终版本
 // import { Redis } from "redis";
 
 export interface ${P} {
@@ -1554,36 +1554,36 @@ ${types ? "\n" + types : ""}
   return { name, interfaceName: P, content, checks, machineOk: ok };
 }
 
-/** 冻结端口：人确认后，文件头写冻结记录 + git 提交。 */
+/** 定稿数据接口：人确认后，文件头写定稿记录 + git 提交。 */
 export function freezePort(name, reviewer = "管理台操作员", group = GROUP) {
   const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
-  if (!existsSync(path)) throw new Error(`端口不存在: ${group}/ports/${name}.ts`);
+  if (!existsSync(path)) throw new Error(`数据接口不存在: ${group}/ports/${name}.ts`);
   const record = `/**
- * 冻结记录（端口）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后冻结。
- * 冻结后任何修改必须走契约演进流程。
+ * 定稿记录（数据接口）：${new Date().toISOString().slice(0, 10)} 由 ${reviewer} 确认后定稿。
+ * 定稿后任何修改必须走功能规格演进流程。
  */
 `;
   writeFileSync(path, record + readFileSync(path, "utf8"));
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
-  const commit = spawnSync("git", ["commit", "-q", "-m", `port: ${name} 端口冻结（人确认）`], { cwd: ROOT });
-  return { committed: commit.status === 0, message: commit.status === 0 ? `已冻结并提交: ports/${name}.ts` : "冻结记录已写入，git 提交失败" };
+  const commit = spawnSync("git", ["commit", "-q", "-m", `port: ${name} 数据接口定稿（人确认）`], { cwd: ROOT });
+  return { committed: commit.status === 0, message: commit.status === 0 ? `已定稿并提交: ports/${name}.ts` : "定稿记录已写入，git 提交失败" };
 }
 
 // ---------------------------------------------------------------------------
-// 端口文件编辑（管理台：人编辑 + git 留痕，与单元文件编辑一致）
+// 数据接口文件编辑（管理台：人编辑 + git 留痕，与单元文件编辑一致）
 // ---------------------------------------------------------------------------
 
 /**
- * 保存端口文件（管理台编辑用）。人编辑冻结区文件是允许的，
+ * 保存数据接口文件（管理台编辑用）。人编辑定稿区文件是允许的，
  * 但每次保存必须 git 提交留痕（"谁在什么时候改了什么"可追溯）。
  */
 export function savePortFile(name, content, note = "", group = GROUP) {
   const path = join(GROUPS_DIR, group, "ports", `${name}.ts`);
-  if (!existsSync(path)) throw new Error(`端口不存在: ${group}/ports/${name}.ts`);
+  if (!existsSync(path)) throw new Error(`数据接口不存在: ${group}/ports/${name}.ts`);
 
   writeFileSync(path, content);
   spawnSync("git", ["add", "-A"], { cwd: ROOT });
-  const commit = spawnSync("git", ["commit", "-q", "-m", `admin: 编辑端口 ${name} — ${note || "（无备注）"}`], { cwd: ROOT });
+  const commit = spawnSync("git", ["commit", "-q", "-m", `admin: 编辑数据接口 ${name} — ${note || "（无备注）"}`], { cwd: ROOT });
   return {
     saved: true,
     committed: commit.status === 0,
@@ -1594,18 +1594,18 @@ export function savePortFile(name, content, note = "", group = GROUP) {
 }
 
 // ---------------------------------------------------------------------------
-// 打包（Agent-E）：AI 辅助生成组合根接线 → 机器预演(tsc) → 人粘贴/确认
+// 接入（Agent-E）：AI 辅助生成组合根接入 → 机器预演(tsc) → 人粘贴/确认
 // ---------------------------------------------------------------------------
 
 /**
- * 接线预演（mock 模式用）：把规则生成的接线写入文件 → 跑 tsc → 自动还原。
- * 机器判据：可编译才允许人确认；还原保证仓库不被预演污染。
+ * 接入预演（mock 模式用）：把规则生成的接入写入文件 → 跑 tsc → 自动还原。
+ * 机器验收测试：可编译才允许人确认；还原保证仓库不被预演污染。
  * @returns { ok, files, summary }——ok = tsc 通过
  */
 export function preflightWiring(name, group = GROUP) {
   const { alreadyWired, files } = generateWiring(name, group);
-  if (alreadyWired) return { ok: true, alreadyWired: true, files: [], summary: "该单元已接线，无需改动" };
-  if (!files.length) return { ok: false, alreadyWired: false, files: [], summary: "无法生成接线改动（锚点缺失）" };
+  if (alreadyWired) return { ok: true, alreadyWired: true, files: [], summary: "该单元已接入，无需改动" };
+  if (!files.length) return { ok: false, alreadyWired: false, files: [], summary: "无法生成接入改动（锚点缺失）" };
 
   // 写入 → tsc → 还原（不提交，仓库零污染）
   for (const f of files) writeFileSync(join(GROUPS_DIR, group, f.path), f.after);
@@ -1618,14 +1618,14 @@ export function preflightWiring(name, group = GROUP) {
     alreadyWired: false,
     files,
     summary: tsc.status === 0
-      ? `✅ 预演通过：接线可编译（${files.length} 个文件，tsc 全项目 0 错误）`
-      : `❌ 预演失败：接线后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
+      ? `✅ 预演通过：接入可编译（${files.length} 个文件，tsc 全项目 0 错误）`
+      : `❌ 预演失败：接入后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
   };
 }
 
 /**
- * 打包助手（Agent-E）：生成接线草稿。
- * - mock 模式：规则生成（generateWiring）+ tsc 预演（机器判据，自动还原）；
+ * 接入助手（Agent-E）：生成接入草稿。
+ * - mock 模式：规则生成（generateWiring）+ tsc 预演（机器验收测试，自动还原）；
  * - 真实模式：调 API（06-composition-drafter.md），产出三段粘贴片段 + 结构初审
  *   （机器检查关键模式），人粘贴后自行跑总闸验证。
  */
@@ -1666,7 +1666,7 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
   const c = camel(name);
   const checks = [
     { label: `index 片段含 import（features/${name}/impl）`, ok: raw.includes(`features/${name}/impl`) },
-    { label: `index 片段含接线方法 ${c}(input) => ${c}(parseOrThrow`, ok: raw.includes(`${c}: (input) => ${c}(parseOrThrow(${P}Input`) },
+    { label: `index 片段含接入方法 ${c}(input) => ${c}(parseOrThrow`, ok: raw.includes(`${c}: (input) => ${c}(parseOrThrow(${P}Input`) },
     { label: `index 片段含 to${P}Deps 依赖装配`, ok: raw.includes(`to${P}Deps`) && raw.includes(`${P}Deps`) },
     { label: "http 片段含路由 /api/" + name, ok: raw.includes(`/api/${name}`) },
     { label: "manifest 片段含版本登记", ok: raw.includes(`"${name}"`) },
@@ -1679,11 +1679,11 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
 // ---------------------------------------------------------------------------
 
 /**
- * 分析一句话需求，规划方案：服务组 / 单元 / 端口（mock：关键词规则；
+ * 分析一句话需求，规划方案：服务组 / 单元 / 数据接口（mock：关键词规则；
  * 真实模式可让 AI 解析——本函数即"需求解析器"的最小实现）。
  *
- * 规则设计：新业务域（订单/库存/地址/收藏…）→ 新服务组 + 新端口 + 新单元；
- * 已有域（认证/登录/邮箱…）→ 复用 auth-service 与现有端口。
+ * 规则设计：新业务域（订单/库存/地址/收藏…）→ 新服务组 + 新数据接口 + 新单元；
+ * 已有域（认证/登录/邮箱…）→ 复用 auth-service 与现有数据接口。
  */
 export function analyzeRequirement(requirement, group = GROUP) {
   const d = requirement ?? "";
@@ -1706,7 +1706,7 @@ export function analyzeRequirement(requirement, group = GROUP) {
   else if (/订单/.test(d)) unitName = "create-order";
   else if (/登录|认证|会话|token/i.test(d)) unitName = "verify-session";
 
-  // ── 端口（该域的外部能力切面）──
+  // ── 数据接口（该域的外部能力切面）──
   let portName = null;
   let portDescription = "";
   if (/收藏/.test(d)) { portName = "favorite-item"; portDescription = "用户收藏的商品条目存储"; }
@@ -1723,7 +1723,7 @@ export function analyzeRequirement(requirement, group = GROUP) {
     unitDescription: requirement,
     reasons: [
       newGroup ? `新业务域 → 创建服务组 ${newGroup}` : `已有业务域 → 复用 ${g}`,
-      portName ? `需要数据切面 → 生成端口 ${portName}` : "复用现有端口，无需新端口",
+      portName ? `需要数据切面 → 生成数据接口 ${portName}` : "复用现有数据接口，无需新数据接口",
       `核心动作 → 单元 ${unitName}`,
     ],
   };
