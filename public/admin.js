@@ -556,15 +556,10 @@ $("btn-source-load").addEventListener("click", () =>
     $("source-content").textContent = r.content;
   }));
 
+// 业务冒烟操作（空框架）：登录/注册等业务已移除，目前仅健康检查可测；
+// 第一个功能接入后，请在这里补充对应的端到端冒烟操作。
 const PLAY_OPS = {
-  "注册 register": { method: "POST", path: "/api/register", body: { email: "demo@b.com", password: "secret123" } },
-  "登录 login": { method: "POST", path: "/api/login", body: { email: "demo@b.com", password: "secret123" } },
-  "查我 me": { method: "GET", path: "/api/me" },
-  "登出 logout": { method: "POST", path: "/api/logout" },
-  "修改密码 change-password": { method: "POST", path: "/api/change-password", body: { currentPassword: "secret123", newPassword: "newpass456" } },
-  "修改邮箱 change-email": { method: "POST", path: "/api/change-email", body: { currentPassword: "secret123", newEmail: "new@b.com" } },
-  "找回密码-请求 request-reset": { method: "POST", path: "/api/password-reset/request", body: { email: "demo@b.com" } },
-  "找回密码-重置 reset": { method: "POST", path: "/api/password-reset", body: { token: "REPLACE_ME", newPassword: "resetpass9" } },
+  "健康检查 health": { method: "GET", path: "/api/health" },
 };
 
 let playCookie = null;
