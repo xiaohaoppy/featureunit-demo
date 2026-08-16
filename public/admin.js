@@ -610,9 +610,9 @@ $("btn-play-clear").addEventListener("click", () => {
 /** 快速入口卡片（开始页）：一键跳转到对应 tab。 */
 function renderQuickGrid() {
   const cards = [
-    { icon: "📦", title: "继续开发", desc: `选择左侧单元，在「单元」页按 4 阶段推进（共 ${state.units.length} 个单元）`, goto: "unit" },
-    { icon: "🔌", title: "管理端口", desc: "端口清单 / AI 生成（Agent-D）/ 冻结", goto: "ports" },
-    { icon: "🧪", title: "试玩冒烟", desc: "注册/登录/查我，验证业务", goto: "play" },
+    { icon: "📦", title: "继续开发", desc: `选择左侧功能，在「功能开发」页按 4 阶段推进（共 ${state.units.length} 个）`, goto: "unit" },
+    { icon: "🔌", title: "数据接口", desc: "接口清单 / AI 生成（Agent-D）/ 冻结", goto: "ports" },
+    { icon: "🧪", title: "业务测试", desc: "注册/登录/查我，验证业务", goto: "play" },
     { icon: "⚙️", title: "配置", desc: "存储模式（memory/file/sqlite）/ AI 密钥", goto: "config" },
   ];
   $("quick-grid").innerHTML = cards.map((c) => `

@@ -165,10 +165,10 @@
   <main>
     <nav class="tabs">
       <button data-tab="start" class="active">🏠 开始</button>
-      <button data-tab="unit">📦 单元</button>
-      <button data-tab="ports">🔌 端口</button>
-      <button data-tab="play">🧪 试玩</button>
-      <button data-tab="source">📄 源码</button>
+      <button data-tab="unit">📦 功能开发（单元）</button>
+      <button data-tab="ports">🔌 数据接口（端口）</button>
+      <button data-tab="play">🧪 业务测试（试玩）</button>
+      <button data-tab="source">📄 代码浏览（源码）</button>
       <button data-tab="config">⚙️ 配置</button>
     </nav>
 
@@ -217,7 +217,7 @@
         <div class="hint" id="unit-wizard-hint"></div>
       </div>
       <div class="card">
-        <h2 id="unit-title">单元工作台（先在左侧选择单元）</h2>
+        <h2 id="unit-title">功能开发工作台（先在左侧选择功能）</h2>
         <div class="file-tabs" id="file-tabs"></div>
         <pre class="code" id="file-content">请在左侧选择一个功能单元。</pre>
 
@@ -298,7 +298,7 @@
     <!-- 端口：统一管理 -->
     <section class="panel" id="panel-ports">
       <div class="card">
-        <h2>端口统一管理（冻结区：接口只读，新建由人确认）</h2>
+        <h2>数据接口管理（端口，冻结区：接口只读，新建由人确认）</h2>
         <div class="row" style="margin-top:8px">
           <input type="text" id="port-new-name" placeholder="端口名（kebab-case，如 token-verifier）" style="flex:1" />
           <input type="text" id="port-new-desc" placeholder="一句话用途（写入文件头）" style="flex:1.5" />
@@ -334,7 +334,7 @@
     <!-- 试玩：业务冒烟 -->
     <section class="panel" id="panel-play">
       <div class="card">
-        <h2>试玩（业务冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）</h2>
+        <h2>业务测试（冒烟：注册/登录/查我/登出/改密/改邮箱/找回密码）</h2>
         <div class="msg warn" style="margin-top:8px" id="play-storage">存储模式：加载中…（「配置」面板切换，保存后本面板自动生效）</div>
         <div class="row" style="margin-top:10px">
           <select id="play-op" style="flex:1"></select>
@@ -353,7 +353,7 @@
     <!-- 源码浏览 -->
     <section class="panel" id="panel-source">
       <div class="card">
-        <h2>源码浏览（冻结区：端口 / 适配器 / 组合根 / 配置）</h2>
+        <h2>代码浏览（冻结区：接口 / 适配器 / 组合根 / 配置）</h2>
         <div class="row">
           <select id="source-file" style="flex:1"></select>
           <button class="btn" id="btn-source-load">查看</button>
