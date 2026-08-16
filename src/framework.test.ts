@@ -78,3 +78,45 @@ describe("判据占位检测（isJudgePlaceholder）", () => {
     expect(isJudgePlaceholder('it("x", () => { expect(1).toBe(1) })')).toBe(false);
   });
 });
+
+describe("存储分离（日志 / 错误 / 数据 独立落盘）", () => {
+  it("业务日志写入 LOG_DIR/app.log（JSON lines），与错误目录分开", async () => {
+    const { createFileLogger } = await import("./groups/auth-service/adapters/file-logger");
+    const { mkdtempSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const base = mkdtempSync(join(tmpdir(), "fu-log-"));
+    const logger = createFileLogger(join(base, "logs"));
+    logger.info("unit.ok", { id: 1 });
+    logger.warn("unit.slow", { ms: 12 });
+    const lines = readFileSync(join(base, "logs", "app.log"), "utf8").trim().split("\n");
+    expect(lines.length).toBe(2);
+    const first = JSON.parse(lines[0]!);
+    expect(first.level).toBe("info");
+    expect(first.msg).toBe("unit.ok");
+    expect(first.ts).toBeTruthy();
+    expect(readFileSync(join(base, "logs", "app.log"), "utf8")).not.toContain("errors.log");
+  });
+
+  it("错误记录写入 ERROR_LOG_DIR/errors.log（错误码/消息/堆栈），与业务日志分开", async () => {
+    const { recordError } = await import("./groups/auth-service/adapters/file-logger");
+    const { AppError } = await import("./groups/auth-service/ports/errors");
+    const { mkdtempSync, readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const base = mkdtempSync(join(tmpdir(), "fu-err-"));
+    const errDir = join(base, "errors");
+    const logDir = join(base, "logs");
+    const err = new AppError("INVALID_INPUT", 400);
+    recordError(errDir, err, { route: "/api/x" });
+    recordError(errDir, new Error("boom"));
+    const lines = readFileSync(join(errDir, "errors.log"), "utf8").trim().split("\n");
+    expect(lines.length).toBe(2);
+    const first = JSON.parse(lines[0]!);
+    expect(first.code).toBe("INVALID_INPUT");
+    expect(first.route).toBe("/api/x");
+    expect(first.type).toBe("AppError");
+    // 错误目录与日志目录互不污染
+    expect(readFileSync(join(errDir, "errors.log"), "utf8")).not.toContain('"level"');
+  });
+});

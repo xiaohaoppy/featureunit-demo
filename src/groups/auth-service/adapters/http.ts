@@ -12,6 +12,8 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { AppError, ErrorCodes } from "../ports/errors";
+import { recordError } from "./file-logger";
+import { loadConfig } from "../config";
 import type { GroupApi } from "../index";
 
 /** 会话 cookie 名（打包生成的"从 cookie 取 token"路由使用）。 */
@@ -33,8 +35,10 @@ async function readJson(c: { req: { json(): Promise<unknown> } }): Promise<unkno
 export function createHttpApp(api: GroupApi): Hono {
   const app = new Hono();
 
-  // 全局错误兜底：AppError → 状态码；未知错误 → 500（不泄漏堆栈）
+  // 全局错误兜底：AppError → 状态码；未知错误 → 500（不泄漏堆栈）。
+  // 所有异常同时落盘到 ERROR_LOG_DIR/errors.log（与业务日志/数据分开）。
   app.onError((err, c) => {
+    recordError(loadConfig().ERROR_LOG_DIR, err, { route: c.req.path });
     if (err instanceof AppError) {
       return c.json({ error: err.code }, err.status as ContentfulStatusCode);
     }

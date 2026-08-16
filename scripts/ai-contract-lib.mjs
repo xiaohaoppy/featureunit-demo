@@ -78,6 +78,8 @@ export const CONFIG_KEYS = [
   { key: "USER_STORE", label: "数据存储模式（框架级：业务数据按此接入）", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
   { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/app.db" },
   { key: "DATA_DIR", label: "JSON 文件数据目录（file 模式）", secret: false, fallback: "./data" },
+  { key: "LOG_DIR", label: "日志存储目录（业务日志 app.log，与数据/错误分开）", secret: false, fallback: "./data/logs" },
+  { key: "ERROR_LOG_DIR", label: "错误记录目录（异常 errors.log，单独落盘）", secret: false, fallback: "./data/errors" },
 ];
 
 // ---------------------------------------------------------------------------

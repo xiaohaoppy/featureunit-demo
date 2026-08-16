@@ -984,9 +984,42 @@ async function loadConfigPanel() {
       configInputs[item.key] = control;
       list.appendChild(row);
     }
+    renderStorageOverview(r.paths);
   } catch (err) {
     $("config-path").textContent = `加载失败：${err.message}`;
   }
+}
+
+/** 存储位置一览：数据 / 日志 / 错误 三个位置相互独立（各自可配置）。 */
+function renderStorageOverview(p) {
+  if (!p) return;
+  const fileLine = (files, dir) => {
+    if (!files || !files.length) return `<span class="hint">（${dir} 尚无文件）</span>`;
+    return `<span class="hint">已有：${files.map(escapeHtml).join("、")}</span>`;
+  };
+  $("config-storage").innerHTML = `
+    <div class="msg warn" style="margin-top:10px">存储位置分离：数据 / 日志 / 错误 各自独立目录，在上方分别配置。</div>
+    <div class="review-item">
+      <div style="flex:1">
+        <div style="font-weight:600">📦 业务数据 <code style="color:var(--muted)">DATA_DIR / SQLITE_PATH</code></div>
+        <div class="hint">目录：${escapeHtml(p.dataDir)} · SQLite：${escapeHtml(p.sqlitePath)}</div>
+        ${fileLine(p.dataFiles, p.dataDir)}
+      </div>
+    </div>
+    <div class="review-item">
+      <div style="flex:1">
+        <div style="font-weight:600">📝 业务日志 <code style="color:var(--muted)">LOG_DIR</code>（app.log，JSON lines）</div>
+        <div class="hint">目录：${escapeHtml(p.logDir)}</div>
+        ${fileLine(p.logFiles, p.logDir)}
+      </div>
+    </div>
+    <div class="review-item">
+      <div style="flex:1">
+        <div style="font-weight:600">⚠️ 错误记录 <code style="color:var(--muted)">ERROR_LOG_DIR</code>（errors.log，异常单独落盘）</div>
+        <div class="hint">目录：${escapeHtml(p.errorLogDir)}</div>
+        ${fileLine(p.errorFiles, p.errorLogDir)}
+      </div>
+    </div>`;
 }
 
 $("btn-config-save").addEventListener("click", () =>

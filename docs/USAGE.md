@@ -83,6 +83,16 @@ npm run admin        # 打开 http://localhost:3001/admin
 - CI/服务器可用环境变量覆盖本地配置；
 - 存储模式（memory/file/sqlite）切换后，业务测试面板**自动重建业务实例**（无需重启）。
 
+### 存储位置分离（页面可控制）
+
+| 内容 | 配置键 | 默认位置 | 说明 |
+|---|---|---|---|
+| 业务数据 | `DATA_DIR` / `SQLITE_PATH` | `./data` / `./data/app.db` | file/sqlite 模式的数据 |
+| 业务日志 | `LOG_DIR` | `./data/logs/app.log` | info/warn/error，JSON lines |
+| 错误记录 | `ERROR_LOG_DIR` | `./data/errors/errors.log` | 异常单独落盘（错误码/消息/堆栈） |
+
+三者相互独立、互不混放；在「配置」tab 分别修改后保存即生效（页面底部实时显示三个位置的现有文件）。
+
 ### 接真实 AI（唯一需要的配置）
 
 ```bash

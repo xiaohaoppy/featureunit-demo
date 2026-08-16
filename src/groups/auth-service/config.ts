@@ -20,6 +20,10 @@ const EnvSchema = z.object({
   DATA_DIR: z.string().default("./data"),
   /** USER_STORE=sqlite 时的数据库文件（相对项目根）。 */
   SQLITE_PATH: z.string().default("./data/app.db"),
+  /** 业务日志落盘目录（相对项目根）：info/warn/error 写 app.log（JSON lines），与数据/错误分开。 */
+  LOG_DIR: z.string().default("./data/logs"),
+  /** 错误记录目录（相对项目根）：异常单独写 errors.log（错误码/消息/堆栈），与业务日志分开。 */
+  ERROR_LOG_DIR: z.string().default("./data/errors"),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;

@@ -161,6 +161,18 @@ if (ready) {
   report("试玩健康检查", r.status === 200 && r.data.body?.includes("ok"), `HTTP ${r.status}`);
   report("试玩携带存储模式", typeof r.data.storageMode === "string", `storageMode=${r.data.storageMode}`);
 
+  // 存储位置分离：数据 / 日志 / 错误 独立配置（页面可控制）
+  r = await api("/admin/api/config");
+  const cfgKeys = (r.data.values ?? []).map((v) => v.key);
+  report("存储配置可控制（LOG_DIR/ERROR_LOG_DIR）",
+    cfgKeys.includes("LOG_DIR") && cfgKeys.includes("ERROR_LOG_DIR") && cfgKeys.includes("DATA_DIR"),
+    cfgKeys.filter((k) => ["LOG_DIR", "ERROR_LOG_DIR", "DATA_DIR", "SQLITE_PATH"].includes(k)).join(","));
+  const paths = r.data.paths ?? {};
+  report("存储位置一览（数据/日志/错误分离）",
+    typeof paths.logDir === "string" && typeof paths.errorLogDir === "string" &&
+      paths.logDir !== paths.errorLogDir && paths.logDir !== paths.dataDir,
+    `数据=${paths.dataDir} 日志=${paths.logDir} 错误=${paths.errorLogDir}`);
+
   // 新建业务系统（冒烟组）
   r = await api("/admin/api/groups", { method: "POST", body: JSON.stringify({ name: "smoke-group" }) });
   report("新建业务系统", r.status === 200, r.data.error ?? "");

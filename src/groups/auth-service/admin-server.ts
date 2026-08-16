@@ -25,7 +25,7 @@
 
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   GROUP,
@@ -71,6 +71,7 @@ import {
 import { loadConfig } from "./config";
 import { buildDeps, createApp } from "./index";
 import { createHttpApp } from "./adapters/http";
+import { recordError } from "./adapters/file-logger";
 
 const ROOT = join(import.meta.dirname, "..", "..", ".."); // src/groups/auth-service → 项目根
 const PUBLIC_DIR = join(ROOT, "public");
@@ -91,6 +92,13 @@ function bizAppFor(): Hono {
 }
 
 const app = new Hono();
+
+// 管理台全局错误兜底：未知异常落盘到 ERROR_LOG_DIR/errors.log（与业务日志/数据分开）。
+app.onError((err, c) => {
+  recordError(loadConfig().ERROR_LOG_DIR, err, { route: c.req.path });
+  console.error("[admin] unhandled error:", err);
+  return c.json({ error: "INTERNAL" }, 500);
+});
 
 /** 从 query 读取服务组（默认 auth-service）；前端组切换时附带 ?group=。 */
 function groupOf(c: { req: { query(key: string): string | undefined } }): string {
@@ -651,6 +659,30 @@ async function cachedModels(): Promise<string[]> {
   }
 }
 
+/**
+ * 存储位置一览：数据 / 日志 / 错误 三个位置相互独立（各自可在配置面板控制）。
+ * 列出每个目录下已有的日志/数据文件，让人一眼看到"分开存放"的效果。
+ */
+function storageOverview() {
+  const cfg = loadConfig();
+  const list = (dir: string) => {
+    const abs = join(ROOT, dir);
+    if (!existsSync(abs)) return [];
+    return readdirSync(abs)
+      .filter((f) => /\.(log|db|json)$/.test(f))
+      .slice(0, 8);
+  };
+  return {
+    dataDir: cfg.DATA_DIR,
+    sqlitePath: cfg.SQLITE_PATH,
+    logDir: cfg.LOG_DIR,
+    errorLogDir: cfg.ERROR_LOG_DIR,
+    dataFiles: list(cfg.DATA_DIR),
+    logFiles: list(cfg.LOG_DIR),
+    errorFiles: list(cfg.ERROR_LOG_DIR),
+  };
+}
+
 /** 配置面板视图：每个 key 的当前生效值 + 来源（本地文件/环境变量/默认值）+ 可选选项。 */
 async function configView() {
   const local = readLocalConfig();
@@ -670,7 +702,11 @@ async function configView() {
       source: fromLocal ? "本地配置文件" : fromEnv ? "环境变量" : "默认值",
     };
   }));
-  return { values, localPath: "featureunit-demo/.featureunit.local.json（已在 .gitignore）" };
+  return {
+    values,
+    paths: storageOverview(),
+    localPath: "featureunit-demo/.featureunit.local.json（已在 .gitignore）",
+  };
 }
 
 /** 密钥打码：只显示首 4 + 尾 4（sk-abc…wxyz）。 */

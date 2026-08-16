@@ -54,6 +54,8 @@ npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 
 > 注意：`deepseek-chat`/`deepseek-reasoner` 已于 2026-07-24 停用，迁移只需把 AI_MODEL 改为 `deepseek-v4-flash` / `deepseek-v4-pro`。
 
+**存储位置分离**（配置面板可独立控制）：业务数据（`DATA_DIR`/`SQLITE_PATH`）、业务日志（`LOG_DIR`→`app.log`）、错误记录（`ERROR_LOG_DIR`→`errors.log`）三个位置互不混放。
+
 ## 四、核心流程（完整故事线）
 
 ```

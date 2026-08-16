@@ -11,7 +11,8 @@
 
 import { z } from "zod";
 import { AppError, ErrorCodes } from "./ports/errors";
-import { consoleLogger, type Logger } from "./ports/logger";
+import type { Logger } from "./ports/logger";
+import { createFileLogger } from "./adapters/file-logger";
 import type { AppConfig } from "./config";
 
 /** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
@@ -22,7 +23,12 @@ export interface GroupDeps {
 
 /** 组装依赖——"换基础设施"的唯一位置（业务出现后在这里接适配器）。 */
 export function buildDeps(config: AppConfig, overrides: Partial<GroupDeps> = {}): GroupDeps {
-  return { logger: consoleLogger, now: () => new Date(), ...overrides };
+  return {
+    // 日志落盘到 LOG_DIR/app.log（配置面板可控制；consoleLogger 可注入覆盖）
+    logger: createFileLogger(config.LOG_DIR),
+    now: () => new Date(),
+    ...overrides,
+  };
 }
 
 /** 边界校验：zod parse 全部发生在组合根这一层（单元内部假定输入已合法）。 */
