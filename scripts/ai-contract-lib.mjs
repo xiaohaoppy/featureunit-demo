@@ -1302,6 +1302,7 @@ export function createGroup(name) {
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "errors.ts"), join(dir, "ports", "errors.ts"));
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "logger.ts"), join(dir, "ports", "logger.ts"));
   copyFileSync(join(GROUPS_DIR, GROUP, "adapters", "file-logger.ts"), join(dir, "adapters", "file-logger.ts"));
+  copyFileSync(join(GROUPS_DIR, GROUP, "adapters", "storage.ts"), join(dir, "adapters", "storage.ts"));
 
   writeFileSync(join(dir, "index.ts"), NEW_GROUP_INDEX(name));
   writeFileSync(join(dir, "adapters", "http.ts"), NEW_GROUP_HTTP);
