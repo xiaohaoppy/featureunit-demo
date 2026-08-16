@@ -13,7 +13,7 @@ import {
   mockDraft,
   machineCheckPort,
   isJudgePlaceholder,
-} from "../../scripts/ai-contract-lib.mjs";
+} from "../scripts/ai-contract-lib.mjs";
 
 describe("需求解析（analyzeRequirement）", () => {
   it("新业务域 → 新组 + 端口 + 单元", () => {
