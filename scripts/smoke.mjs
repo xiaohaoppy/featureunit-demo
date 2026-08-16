@@ -226,7 +226,9 @@ describe("toggle-favorite 单元判据", () => {
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
   report("⑤ 实现确认 → 自动接入（编译预检）", r.status === 200 && r.data.step === "wiring", r.data.artifact?.wiring?.preflight?.summary?.slice(0, 50) ?? "");
 
+  console.log("    [diag] ⑥ before: step=" + (r.data?.step ?? "?"));
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
+  console.log("    [diag] ⑥ after : status=" + r.status + " step=" + (r.data?.step ?? "?") + " full=" + JSON.stringify(r.data).slice(0, 900));
   const doneOk = r.data.step === "done" && (r.data.error ?? "") === "";
   report("⑥ 接入确认 → 完成", doneOk, JSON.stringify(r.data).slice(0, 150));
 }
