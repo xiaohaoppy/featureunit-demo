@@ -228,7 +228,9 @@ describe("toggle-favorite 单元判据", () => {
 
   console.log("    [diag] ⑥ before: step=" + (r.data?.step ?? "?"));
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
-  console.log("    [diag] ⑥ after : status=" + r.status + " step=" + (r.data?.step ?? "?") + " preflight=" + JSON.stringify(r.data?.artifact?.wiring?.preflight).slice(0, 3000));
+  const pf = r.data?.artifact?.wiring?.preflight ?? {};
+  console.log("    [diag] ⑥ after : status=" + r.status + " step=" + (r.data?.step ?? "?") + " pfkeys=" + Object.keys(pf).join(","));
+  for (const k of Object.keys(pf)) { if (k !== "files") console.log("    [diag] pf." + k + "=" + JSON.stringify(pf[k]).slice(0, 2000)); }
   const doneOk = r.data.step === "done" && (r.data.error ?? "") === "";
   report("⑥ 接入确认 → 完成", doneOk, JSON.stringify(r.data).slice(0, 150));
 }
