@@ -558,15 +558,20 @@ export function generateWiring(name, group = GROUP) {
 import type { ${P}Deps } from "./features/${name}/contract";
 import { ${P}Input } from "./features/${name}/contract";`;
       next = insertAfter(next, `import type { AppConfig } from "./config";`, imports);
+      // 顺序重要：先插方法声明、再插 toXDeps（锚定完整 createApp 块，不受前序插入影响）、最后插接线
       next = insertAfter(next, `  health(): { ok: boolean };`,
         `  ${c}(input: unknown): Promise<void>;`);
-      next = insertAfter(next, `    health: () => ({ ok: true }),`,
-        `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
-      next = insertAfter(next, `  health: () => ({ ok: true }),
-};`,
+      const appBlock = `export function createApp(deps: GroupDeps): GroupApi {
+  return {
+    health: () => ({ ok: true }),
+  };
+}`;
+      next = insertAfter(next, appBlock,
         `function to${P}Deps(d: GroupDeps): ${P}Deps {
   return { ${depArgs} };
 }`);
+      next = insertAfter(next, `    health: () => ({ ok: true }),`,
+        `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
     }
     if (next && next !== index) {
       results.push({ path: "index.ts", before: index, after: next, diffText: simpleDiff(index, next) });
@@ -1146,6 +1151,49 @@ export function createApp(deps: GroupDeps): GroupApi {
 `;
 
 /** 新组配置骨架（fail fast；与管理台本地配置兼容）。 */
+/** 新组 HTTP 壳（含打包生成路由所需的助手）。 */
+const NEW_GROUP_HTTP = `/**
+ * [角色] 适配器：http —— 薄 HTTP 层（全组唯一接触 Web 框架的地方）
+ * 空框架壳：业务路由由 Agent-E 打包时插入（锚点：\`return app;\` 之前）。
+ * 助手（readJson / cookie / ErrorCodes）已就位——打包生成的路由直接可编译。
+ */
+
+import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { AppError, ErrorCodes } from "../ports/errors";
+import type { GroupApi } from "../index";
+
+/** 会话 cookie 名（打包生成的"从 cookie 取 token"路由使用）。 */
+export const SESSION_COOKIE = "sid";
+
+/** 读取并解析 JSON body；非法 JSON → INVALID_INPUT。 */
+async function readJson(c) {
+  try {
+    return await c.req.json();
+  } catch {
+    throw new AppError(ErrorCodes.INVALID_INPUT, 400);
+  }
+}
+
+export function createHttpApp(api: GroupApi): Hono {
+  const app = new Hono();
+
+  app.onError((err, c) => {
+    if (err instanceof AppError) {
+      return c.json({ error: err.code }, err.status as ContentfulStatusCode);
+    }
+    console.error("[http] unhandled error:", err);
+    return c.json({ error: "INTERNAL" }, 500);
+  });
+
+  app.get("/api/health", (c) => c.json(api.health()));
+
+  // ← 打包插入点：Agent-E 生成的路由会加在这里（\`return app;\` 之前）
+  return app;
+}
+`;
+
 const NEW_GROUP_CONFIG = (name) => `/**
  * [角色] 配置：${name} —— 唯一允许读配置的文件（fail fast）
  * 优先级：本地配置文件（.featureunit.local.json）→ 环境变量 → 默认值。
@@ -1228,6 +1276,7 @@ export function createGroup(name) {
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "logger.ts"), join(dir, "ports", "logger.ts"));
 
   writeFileSync(join(dir, "index.ts"), NEW_GROUP_INDEX(name));
+  writeFileSync(join(dir, "adapters", "http.ts"), NEW_GROUP_HTTP);
   writeFileSync(join(dir, "config.ts"), NEW_GROUP_CONFIG(name));
   writeFileSync(
     join(dir, "manifest.json"),

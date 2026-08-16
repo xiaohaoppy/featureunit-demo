@@ -177,6 +177,7 @@ export function applyWiring(
 export function mockDraft(
   name: string,
   requirement: string,
+  group?: string,
 ): { ts: string; md: string };
 export function generateDraft(
   name: string,

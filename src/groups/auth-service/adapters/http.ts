@@ -3,14 +3,28 @@
  * [角色] 适配器：http —— 薄 HTTP 层（全组唯一接触 Web 框架的地方）
  * ----------------------------------------------------------------------------
  * 空框架壳：只有健康检查路由。业务路由由 Agent-E 打包时插入
- * （锚点：`return app;` 之前），错误处理协议已就位。
+ * （锚点：`return app;` 之前）。
+ * 助手（readJson / cookie / ErrorCodes）已就位——打包生成的路由直接可编译。
  * ============================================================================
  */
 
 import { Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import { AppError } from "../ports/errors";
+import { AppError, ErrorCodes } from "../ports/errors";
 import type { GroupApi } from "../index";
+
+/** 会话 cookie 名（打包生成的"从 cookie 取 token"路由使用）。 */
+export const SESSION_COOKIE = "sid";
+
+/** 读取并解析 JSON body；非法 JSON → INVALID_INPUT（而不是 500）。 */
+async function readJson(c: { req: { json(): Promise<unknown> } }): Promise<unknown> {
+  try {
+    return await c.req.json();
+  } catch {
+    throw new AppError(ErrorCodes.INVALID_INPUT, 400);
+  }
+}
 
 /**
  * 把 GroupApi 包成 Hono 应用。
