@@ -257,6 +257,11 @@ describe("toggle-favorite 单元判据", () => {
   // 非 404 即证明路由真实注册（400=业务拦截/401=会话校验，都是路由在跑；
   // mock 实现是刻意坏实现，业务结果不可预期——这里只防"死代码 404"回归）
   report("新组路由冒烟（接入路由已注册）", r.status === 200 && r.data.status !== 404, `HTTP ${r.data.status}`);
+
+  // 业务测试面板：操作列表动态发现（接入后自动出现，无需改前端）
+  r = await api("/admin/api/play/ops?group=favorite-service");
+  const opsPaths = (r.data.ops ?? []).map((o) => o.path).join(",");
+  report("业务测试操作动态发现", r.status === 200 && opsPaths.includes("/api/toggle-favorite"), opsPaths);
 }
 
 // ---------------------------------------------------------------------------

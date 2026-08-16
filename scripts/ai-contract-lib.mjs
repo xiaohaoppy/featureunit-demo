@@ -1709,6 +1709,58 @@ export async function generateWiringDraft(name, { mock = true } = {}, group = GR
 }
 
 // ---------------------------------------------------------------------------
+// 业务测试面板：动态发现已接入功能的冒烟操作（替代硬编码操作列表）
+// ---------------------------------------------------------------------------
+
+/** 从功能规格文本推断字段的 zod 类型（用于生成示例请求体）。 */
+function inferFieldType(contract, field) {
+  const m = new RegExp(`\\b${field}:\\s*z\\.(\\w+)`).exec(contract ?? "");
+  return m ? m[1] : "string";
+}
+
+/** 给字段生成示例值（演示用；具体业务校验由单元自己把关）。 */
+function sampleFor(field, type) {
+  if (type === "number") return 1;
+  if (type === "boolean") return true;
+  if (type === "any") return {};
+  if (/token|session|sid/i.test(field)) return "demo-token";
+  if (/email/i.test(field)) return "demo@example.com";
+  if (/id$/i.test(field)) return "demo-id";
+  return "demo";
+}
+
+/**
+ * 列出某业务系统的可冒烟操作：
+ * 健康检查 + 每个已接入功能的一条 POST 路由（操作随接入自动出现，无需改前端）。
+ * token 字段的路由从 cookie 取（needsCookie=true，无 cookie 会 401——面板会提示）。
+ */
+export function listPlayOps(group = GROUP) {
+  const ops = [{ label: "健康检查 health", method: "GET", path: "/api/health", needsCookie: false }];
+  const manifestRaw = readSourceFile("manifest.json", group);
+  if (manifestRaw) {
+    try {
+      const manifest = JSON.parse(manifestRaw);
+      for (const name of Object.keys(manifest.features ?? {})) {
+        const contract = readUnitFiles(name, group).contract ?? "";
+        const fields = extractInputFields(contract);
+        const body = {};
+        for (const f of fields) body[f] = sampleFor(f, inferFieldType(contract, f));
+        ops.push({
+          label: `${name}（POST /api/${name}）`,
+          method: "POST",
+          path: `/api/${name}`,
+          body,
+          needsCookie: fields.includes("token"),
+        });
+      }
+    } catch {
+      /* manifest 损坏则只提供健康检查 */
+    }
+  }
+  return ops;
+}
+
+// ---------------------------------------------------------------------------
 // 流水线（超级向导）：从一句话需求自动规划 → 逐步生成 → 人逐步确认
 // ---------------------------------------------------------------------------
 

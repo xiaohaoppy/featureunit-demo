@@ -556,46 +556,57 @@ $("btn-source-load").addEventListener("click", () =>
     $("source-content").textContent = r.content;
   }));
 
-// 业务冒烟操作（空框架）：登录/注册等业务已移除，目前仅健康检查可测；
-// 第一个功能接入后，请在这里补充对应的端到端冒烟操作。
-const PLAY_OPS = {
-  "健康检查 health": { method: "GET", path: "/api/health" },
-};
-
+// 业务冒烟：操作列表动态发现（健康检查 + 每个已接入功能的一条 POST 路由；
+// 业务系统下拉切换组，操作随接入自动出现，无需改前端）。
+let PLAY_OPS = [];
 let playCookie = null;
 
-function fillPlayOps() {
-  $("play-op").innerHTML = Object.keys(PLAY_OPS).map((k) => `<option>${k}</option>`).join("");
+async function fillPlayGroups() {
+  const r = await api("/admin/api/groups");
+  const groups = r.groups ?? [];
+  $("play-group").innerHTML = groups.map((g) => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join("");
+  await fillPlayOps();
 }
 
-$("play-op").addEventListener("change", () => {
-  const op = PLAY_OPS[$("play-op").value];
-  $("play-body").value = op.body ? JSON.stringify(op.body, null, 2) : "";
-  $("play-output").textContent = "填写请求体后点击「发送」。";
-});
+async function fillPlayOps() {
+  const group = $("play-group").value;
+  const r = await api(`/admin/api/play/ops?group=${encodeURIComponent(group)}`);
+  PLAY_OPS = r.ops ?? [];
+  $("play-op").innerHTML = PLAY_OPS.map((o) => `<option value="${escapeHtml(o.path)}">${escapeHtml(o.label)}</option>`).join("");
+  onPlayOpChange();
+}
+
+function onPlayOpChange() {
+  const op = PLAY_OPS.find((o) => o.path === $("play-op").value);
+  $("play-body").value = op?.body ? JSON.stringify(op.body, null, 2) : "";
+  $("play-output").textContent = op?.needsCookie && !playCookie
+    ? "⚠️ 该操作需要会话 cookie（token 从 cookie 取）——先执行产生 cookie 的操作，或手动填写 cookie。"
+    : "填写请求体后点击「发送」。";
+}
+
+$("play-group").addEventListener("change", () => { playCookie = null; $("play-cookie").textContent = "会话 cookie：无"; fillPlayOps(); });
+$("play-op").addEventListener("change", onPlayOpChange);
 
 $("btn-play-send").addEventListener("click", () =>
   withBusy($("btn-play-send"), "发送中…", async () => {
-    const op = PLAY_OPS[$("play-op").value];
+    const op = PLAY_OPS.find((o) => o.path === $("play-op").value);
     let data;
     try {
       data = $("play-body").value.trim() ? JSON.parse($("play-body").value) : undefined;
     } catch {
       return alert("请求体不是合法 JSON");
     }
-    const r = await api("/admin/api/play", { method: "POST", body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }) });
+    const group = $("play-group").value;
+    const r = await api(`/admin/api/play?group=${encodeURIComponent(group)}`, { method: "POST", body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }) });
     $("play-output").textContent = `HTTP ${r.status}\n${r.body}`;
-    $("play-storage").textContent = r.status === 404
-      ? "还没有业务——先用 🏠 开始页说一句话创建你的第一个功能（存储模式：" + (r.storageMode ?? "memory") + "）"
-      : "✅ 业务已就绪（存储模式：" + (r.storageMode ?? "memory") + "）";
+    $("play-storage").textContent = "存储模式：" + (r.storageMode ?? "memory") + "（「配置」面板切换）";
     if (r.setCookie) {
       const m = /sid=([^;]+)/.exec(r.setCookie);
       playCookie = m ? `sid=${m[1]}` : playCookie;
       $("play-cookie").textContent = `会话 cookie：${playCookie}`;
     }
-    if (["/api/logout", "/api/change-password", "/api/change-email", "/api/password-reset"].includes(op.path)) {
-      playCookie = null;
-      $("play-cookie").textContent = "会话 cookie：无（该操作已使会话失效）";
+    if (op.needsCookie && r.status === 401) {
+      $("play-cookie").textContent = "会话 cookie：无（该操作需要会话，先执行登录类操作）";
     }
   }));
 
@@ -1056,7 +1067,7 @@ $("btn-refresh").addEventListener("click", () => {
   loadPorts();
 });
 
-fillPlayOps();
+fillPlayGroups();
 loadGroups();
 loadUnits();
 loadSourceList();

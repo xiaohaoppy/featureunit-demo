@@ -21,6 +21,14 @@ export function unitDir(name: string, group?: string): string;
 export function pascal(kebab: string): string;
 export function camel(kebab: string): string;
 export function listGroups(): string[];
+/** 业务测试面板的冒烟操作（动态发现已接入功能）。 */
+export function listPlayOps(group?: string): Array<{
+  label: string;
+  method: string;
+  path: string;
+  body?: Record<string, unknown>;
+  needsCookie?: boolean;
+}>;
 export function createGroup(name: string): { name: string; dir: string };
 export function portList(group?: string): {
   group: string;

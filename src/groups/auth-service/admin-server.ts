@@ -32,6 +32,7 @@ import {
   REVIEW_ITEMS,
   CONFIG_KEYS,
   listGroups,
+  listPlayOps,
   createGroup,
   portList,
   createPort,
@@ -820,6 +821,12 @@ app.get("/admin/api/storage/probe", async (c) => {
       500,
     );
   }
+});
+
+/** 业务测试面板：某业务系统的可冒烟操作（动态发现已接入功能，随接入自动出现）。 */
+app.get("/admin/api/play/ops", (c) => {
+  const group = groupOf(c);
+  return c.json({ group, ops: listPlayOps(group) });
 });
 
 // ---------------------------------------------------------------------------
