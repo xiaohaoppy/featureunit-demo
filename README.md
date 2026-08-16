@@ -40,6 +40,7 @@
 
 ```bash
 npm install
+npm run doctor    # 环境自检：一键回答"这台机器还缺什么"（Node/git/依赖/原生模块）
 npm run check     # 总闸：类型检查 + 全部测试（应全绿）
 npm run admin     # 管理台：http://localhost:3001/admin（推荐入口）
 npm run dev       # 业务服务：http://localhost:3000（访问生成的功能路由）

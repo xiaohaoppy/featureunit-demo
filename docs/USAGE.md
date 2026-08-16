@@ -23,6 +23,7 @@
 ```bash
 cd featureunit-demo
 npm install
+npm run doctor       # 环境自检（Node/git/依赖/原生模块），全绿再继续
 npm run check        # 应全绿（类型检查 + 全部测试）
 npm run admin        # 打开 http://localhost:3001/admin
 ```

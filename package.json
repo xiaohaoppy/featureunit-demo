@@ -2,7 +2,7 @@
   "name": "featureunit-demo",
   "version": "0.1.0",
   "private": true,
-  "description": "FeatureUnit 框架演示：AI 友好的功能单元 + 服务组（登录系统）",
+  "description": "FeatureUnit 框架 —— 让 AI 放心写代码：AI 生成 → 机器判据 → 人确认，每个产物定稿进 git",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -17,18 +17,19 @@
     "smoke": "node scripts/smoke.mjs",
     "feat": "node scripts/feat.mjs",
     "dev": "tsx scripts/dev-server.ts",
-    "start": "tsx scripts/dev-server.ts"
+    "start": "tsx scripts/dev-server.ts",
+    "doctor": "node scripts/doctor.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "better-sqlite3": "^13.0.3",
     "hono": "^4.6.14",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
