@@ -599,8 +599,11 @@ ${cookieLine}    const body = (await readJson(c)) as Record<string, unknown>;
 ${callLine}
     return c.json({ ok: true });
   });`;
+    // 路由必须插在 `return app;` 之前——插在 return 之后是死代码（tsc 不报，
+    // 路由永不注册）。return app; 在组 http.ts 中唯一（模板锚点）。
     const anchor = `  return app;`;
-    const next = insertAfter(http, anchor, route);
+    const next = http.replace(anchor, `${route}
+${anchor}`);
     if (next && next !== http) {
       results.push({ path: "adapters/http.ts", before: http, after: next, diffText: simpleDiff(http, next) });
     }

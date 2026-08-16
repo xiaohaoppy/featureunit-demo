@@ -25,7 +25,7 @@
 
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   GROUP,
@@ -70,23 +70,29 @@ import {
 } from "../../../scripts/ai-contract-lib.mjs";
 import { loadConfig } from "./config";
 import { buildDeps, createApp } from "./index";
-import { createHttpApp } from "./adapters/http";
 import { recordError } from "./adapters/file-logger";
 
 const ROOT = join(import.meta.dirname, "..", "..", ".."); // src/groups/auth-service → 项目根
 const PUBLIC_DIR = join(ROOT, "public");
 
 // 业务应用实例（"试玩"面板直接调用，无需另起 dev 服务）。
-// 惰性 + 配置版本检测：管理台「配置」面板改了 USER_STORE 等后，
-// 下一次试玩请求自动按新配置重建实例（不用重启管理台）。
+// 惰性 + 版本检测：按 ?group= 选择组合根；版本 = 配置 + 组合根文件指纹
+// （配置面板改了 USER_STORE 等、或接入新功能改了组合根，下一次试玩自动重建实例）。
 let bizCache: { version: string; app: Hono } | null = null;
 
-function bizAppFor(): Hono {
+async function bizAppFor(c: { req: { query(key: string): string | undefined } }): Promise<Hono> {
+  const group = groupOf(c);
   const cfg = loadConfig(); // 每次读配置（含本地文件），校验失败会 fail fast
-  const version = JSON.stringify(cfg);
+  const indexTs = join(ROOT, "src/groups", group, "index.ts");
+  const fingerprint = existsSync(indexTs) ? String(statSync(indexTs).mtimeMs) : "?";
+  const version = JSON.stringify(cfg) + "|" + group + "|" + fingerprint;
   if (!bizCache || bizCache.version !== version) {
-    bizCache = { version, app: createHttpApp(createApp(buildDeps(cfg))) };
-    console.log(`[admin] 业务实例已重建（配置版本变更: ${version.slice(0, 40)}…）`);
+    // 动态 import 对应组的组合根与 HTTP 适配器（路由在每组自己的 http.ts 里）；
+    // 带指纹 query 打破模块缓存（组合根变更后重新加载）
+    const mod = await import(`${indexTs}?t=${fingerprint}`);
+    const httpMod = await import(`${join(ROOT, "src/groups", group, "adapters/http.ts")}?t=${fingerprint}`);
+    bizCache = { version, app: httpMod.createHttpApp(mod.createApp(mod.buildDeps(cfg))) };
+    console.log(`[admin] 业务实例已重建（${group}，配置或组合根变更）`);
   }
   return bizCache.app;
 }
@@ -769,7 +775,7 @@ app.post("/admin/api/play", async (c) => {
     return c.json({ error: "path 必须以 /api/ 开头" }, 400);
   }
   try {
-    const res = await bizAppFor().request(path, {
+    const res = await (await bizAppFor(c)).request(path, {
       method,
       headers: {
         "content-type": "application/json",
