@@ -1,0 +1,20 @@
+{
+  "name": "inventory-service",
+  "description": "服务组：inventory-service（新建，等待第一个功能单元）",
+  "version": "0.1.0",
+  "owner": "human",
+  "features": {},
+  "rules": {
+    "compositionRootOwner": "human",
+    "aiWritablePaths": [
+      "**/impl.ts"
+    ],
+    "frozenPaths": [
+      "**/contract.ts",
+      "**/spec.md",
+      "**/impl.test.ts",
+      "ports/**",
+      "index.ts"
+    ]
+  }
+}
