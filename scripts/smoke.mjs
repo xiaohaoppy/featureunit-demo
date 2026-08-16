@@ -233,13 +233,22 @@ report("npm run migrate（sqlite 建库）", migrate.status === 0 && /framework_
 console.log("\n── 清理 ──");
 const cleanDirs = ["src/groups/smoke-group", "src/groups/favorite-service", "data"];
 for (const d of cleanDirs) rmSync(join(ROOT, d), { recursive: true, force: true });
-// 撤销冒烟期间产生的提交，回到冒烟前 HEAD（安全：冒烟开始前工作区干净）
+// 清理：先删已知演示目录（含"未提交就失败"的残留），再撤销冒烟提交回到 BASE_HEAD
+for (const d of ["src/groups/smoke-group", "src/groups/favorite-service", "data"]) {
+  rmSync(join(ROOT, d), { recursive: true, force: true });
+}
+const leftover = run("find", ["src/groups", "-name", "smoke-unit", "-o", "-name", "smoke-cli-unit"]);
+if (leftover.stdout.trim()) {
+  for (const line of leftover.stdout.trim().split("\n")) {
+    rmSync(join(ROOT, line.trim()), { recursive: true, force: true });
+  }
+}
 const commitCount = run("git", ["rev-list", "--count", "HEAD", "--not", BASE_HEAD]);
-for (let i = 0; i < parseInt(commitCount.stdout, 10); i++) {
+for (let i = 0; i < parseInt(commitCount.stdout || "0", 10); i++) {
   spawnSync("git", ["reset", "-q", "--hard", "HEAD~1"], { cwd: ROOT });
 }
-spawnSync("git", ["clean", "-q", "-fd", "--", "src/groups/", "data/"], { cwd: ROOT });
-report("演示产物与提交已清理", run("git", ["status", "--short"]).stdout.trim() === "", run("git", ["status", "--short"]).stdout.trim().split("\n").slice(0, 3).join(" | "));
+const dirty = run("git", ["status", "--short"]).stdout.trim();
+report("演示产物与提交已清理", dirty === "", dirty.split("\n").slice(0, 3).join(" | "));
 
 // 关闭管理台
 admin?.kill("SIGTERM");
