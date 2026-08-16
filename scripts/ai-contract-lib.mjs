@@ -75,10 +75,6 @@ export const CONFIG_KEYS = [
   { key: "AI_MODEL", label: "AI 模型名（保存时自动从 API 获取列表）", secret: false, fallback: "deepseek-v4-flash", options: ["deepseek-v4-flash", "deepseek-v4-pro"] },
   { key: "AI_REASONING", label: "推理等级（low=快/省 high=深度推理）", secret: false, fallback: "medium", options: ["low", "medium", "high"] },
   { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
-  { key: "SESSION_TTL_DAYS", label: "会话有效期（天）", secret: false, fallback: "30" },
-  { key: "RESET_TOKEN_TTL_MINUTES", label: "重置 token 有效期（分钟）", secret: false, fallback: "30" },
-  { key: "RATE_LIMIT_MAX", label: "找回密码限流（次/窗口）", secret: false, fallback: "3" },
-  { key: "RATE_LIMIT_WINDOW_MS", label: "限流窗口（毫秒）", secret: false, fallback: "600000" },
 ];
 
 // ---------------------------------------------------------------------------
