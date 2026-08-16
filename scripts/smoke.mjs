@@ -262,6 +262,16 @@ describe("toggle-favorite 单元判据", () => {
   r = await api("/admin/api/play/ops?group=favorite-service");
   const opsPaths = (r.data.ops ?? []).map((o) => o.path).join(",");
   report("业务测试操作动态发现", r.status === 200 && opsPaths.includes("/api/toggle-favorite"), opsPaths);
+
+  // manifest 必须是合法 JSON 且登记了新功能（防尾逗号类回归）
+  const mfRaw = readFileSync(join(ROOT, "src/groups/favorite-service/manifest.json"), "utf8");
+  let mfOk = false, mfDetail = "";
+  try {
+    const mf = JSON.parse(mfRaw);
+    mfOk = mf.features?.toggleFavorite !== undefined || mf.features?.["toggle-favorite"] !== undefined;
+    mfDetail = `features=${JSON.stringify(mf.features)}`;
+  } catch (e) { mfDetail = e.message; }
+  report("manifest 合法且登记功能", mfOk, mfDetail);
 }
 
 // ---------------------------------------------------------------------------
