@@ -1,12 +1,11 @@
 /**
  * ============================================================================
- * [角色] 组合根：favorite-service —— 骨架（人维护，AI 禁止触碰）
+ * [角色] 组合根：index —— 空框架骨架（人维护，AI 禁止触碰）
  * ----------------------------------------------------------------------------
- * 新组从空 API 开始。接入第一个功能单元时：
- *   1. 参照 auth-service/index.ts 的接入模式（import → AuthApi → createApp → toXDeps）；
- *   2. 管理台「一键接入」的锚点目前面向 auth-service——新组第一个单元请人工接入，
- *      之后可扩展锚点支持多组；
- *   3. 接入完跑总闸（npm run check）确认。
+ * 登录业务已移除，本文件是纯净的组合根骨架：
+ *   - 唯一"知道一切"的文件（加第一个功能时由 Agent-E 打包接入）；
+ *   - 只做"接线"：import → GroupApi 方法 → createApp 接线 → toXDeps 装配；
+ *   - 第一个功能接线后，这里开始变长——但组合逻辑始终只在这一处。
  * ============================================================================
  */
 
@@ -14,6 +13,9 @@ import { z } from "zod";
 import { AppError, ErrorCodes } from "./ports/errors";
 import { consoleLogger, type Logger } from "./ports/logger";
 import type { AppConfig } from "./config";
+import { toggleFavorite } from "./features/toggle-favorite/impl";
+import type { ToggleFavoriteDeps } from "./features/toggle-favorite/contract";
+import { ToggleFavoriteInput } from "./features/toggle-favorite/contract";
 
 /** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
 export interface GroupDeps {
@@ -21,7 +23,7 @@ export interface GroupDeps {
   now: () => Date;
 }
 
-/** 组装依赖——"换基础设施"的唯一位置。 */
+/** 组装依赖——"换基础设施"的唯一位置（业务出现后在这里接适配器）。 */
 export function buildDeps(config: AppConfig, overrides: Partial<GroupDeps> = {}): GroupDeps {
   return { logger: consoleLogger, now: () => new Date(), ...overrides };
 }
@@ -37,10 +39,15 @@ function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown): T {
 export interface GroupApi {
   /** 健康检查：验证组合根与配置可用。 */
   health(): { ok: boolean };
+  toggleFavorite(input: unknown): Promise<void>;
 }
 
 export function createApp(deps: GroupDeps): GroupApi {
   return {
     health: () => ({ ok: true }),
+    toggleFavorite: (input) => toggleFavorite(parseOrThrow(ToggleFavoriteInput, input), toToggleFavoriteDeps(deps)),
   };
+}
+function toToggleFavoriteDeps(d: GroupDeps): ToggleFavoriteDeps {
+  return { logger: d.logger };
 }

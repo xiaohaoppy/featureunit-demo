@@ -1,20 +1,13 @@
 {
-  "name": "favorite-service",
-  "description": "服务组：favorite-service（新建，等待第一个功能单元）",
+  "name": "auth-service",
+  "description": "空框架演示组（等待第一个功能）",
   "version": "0.1.0",
   "owner": "human",
-  "features": {},
+  "features": {
+    "toggle-favorite": "1.0.0",},
   "rules": {
     "compositionRootOwner": "human",
-    "aiWritablePaths": [
-      "**/impl.ts"
-    ],
-    "frozenPaths": [
-      "**/contract.ts",
-      "**/spec.md",
-      "**/impl.test.ts",
-      "ports/**",
-      "index.ts"
-    ]
+    "aiWritablePaths": ["**/impl.ts"],
+    "frozenPaths": ["**/contract.ts", "**/spec.md", "**/impl.test.ts", "ports/**", "index.ts"]
   }
 }
