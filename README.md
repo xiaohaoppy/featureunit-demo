@@ -7,7 +7,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/USAGE.md`](docs/USAGE.md) | **使用手册**：两个入口、6 个 tab、日常流程、命令、配置 |
+| [`docs/USAGE.md`](docs/USAGE.md) | **使用手册**：三个入口、6 个 tab、日常流程、命令、配置、正式部署 |
 | [`docs/TUTORIAL.md`](docs/TUTORIAL.md) | **上手教程**：从一句话需求到功能上线（含完整案例） |
 | [`docs/FEATUREUNIT-GUIDE.md`](docs/FEATUREUNIT-GUIDE.md) | **框架指南**：理念、机制、六 AI 助手、功能规格体系、边界 |
 | [`docs/contract-template.md`](docs/contract-template.md) | 功能规格六要素模板 |
