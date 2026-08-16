@@ -545,11 +545,18 @@ app.post("/admin/api/pipeline/confirm", async (c) => {
         break;
       }
       case "wiring": {
-        // ⑥ 接线确认：机器判据先行——预演失败（tsc 有错）禁止确认落盘
-        const wiringArt = pipeline.artifact as { wiring?: { preflight?: { ok: boolean; summary: string } } } | undefined;
+        // ⑥ 接入确认：机器判据先行——预演失败时自动重新生成草稿重试
+        // （人可能已修复契约/实现等文件；不重试则永远卡在旧失败结果上）。
+        let wiringArt = pipeline.artifact as { wiring?: { preflight?: { ok: boolean; summary: string } } } | undefined;
         if (wiringArt?.wiring?.preflight && !wiringArt.wiring.preflight.ok) {
-          pipeline.log.push("✗ 编译预检失败——禁止确认落盘（机器判据拦截），请人工检查或打回");
-          return c.json({ ...pipeline, error: `编译预检失败（tsc 有错）：${wiringArt.wiring.preflight.summary}` }, 400);
+          const retry = await generateWiringDraft(unit, { mock }, group, "medium");
+          pipeline.artifact = { wiring: retry };
+          pipeline.log.push(`  · 预演未通过——已按最新文件重新生成接入草稿并重试`);
+          wiringArt = pipeline.artifact as { wiring?: { preflight?: { ok: boolean; summary: string } } } | undefined;
+          if (!wiringArt?.wiring?.preflight?.ok) {
+            pipeline.log.push("✗ 编译预检仍失败——禁止确认落盘（机器判据拦截），请人工检查或打回");
+            return c.json({ ...pipeline, error: `编译预检失败（tsc 有错）：${wiringArt?.wiring?.preflight?.summary}` }, 400);
+          }
         }
         const r = applyWiring(unit, "流水线确认", group);
         pipeline.log.push(`  · ${r.message}`);

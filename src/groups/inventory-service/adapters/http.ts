@@ -40,4 +40,10 @@ export function createHttpApp(api: GroupApi): Hono {
 
   // ← 接入插入点：Agent-E 生成的路由会加在这里（`return app;` 之前）
   return app;
+  // ── record-stock-movement ────────────────────────────────────────────────
+  app.post("/api/record-stock-movement", async (c) => {
+    const body = (await readJson(c)) as Record<string, unknown>;
+    await api.recordStockMovement(body);
+    return c.json({ ok: true });
+  });
 }

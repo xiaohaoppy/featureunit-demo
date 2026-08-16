@@ -14,6 +14,9 @@ import type { Logger } from "./ports/logger";
 import { createFileLogger } from "./adapters/file-logger";
 import { createKVStore, type KVStore } from "./adapters/storage";
 import type { AppConfig } from "./config";
+import { recordStockMovement } from "./features/record-stock-movement/impl";
+import type { RecordStockMovementDeps } from "./features/record-stock-movement/contract";
+import { RecordStockMovementInput } from "./features/record-stock-movement/contract";
 
 /** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
 export interface GroupDeps {
@@ -46,10 +49,15 @@ function parseOrThrow<T>(schema: z.ZodType<T>, data: unknown): T {
 export interface GroupApi {
   /** 健康检查：验证组合根与配置可用。 */
   health(): { ok: boolean };
+  recordStockMovement(input: unknown): Promise<void>;
 }
 
 export function createApp(deps: GroupDeps): GroupApi {
   return {
     health: () => ({ ok: true }),
+    recordStockMovement: (input) => recordStockMovement(parseOrThrow(RecordStockMovementInput, input), toRecordStockMovementDeps(deps)),
   };
+}
+function toRecordStockMovementDeps(d: GroupDeps): RecordStockMovementDeps {
+  return { logger: d.logger, kv: d.kv, now: d.now };
 }

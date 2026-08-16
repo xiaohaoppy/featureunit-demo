@@ -3,7 +3,8 @@
   "description": "服务组：inventory-service（新建，等待第一个功能单元）",
   "version": "0.1.0",
   "owner": "human",
-  "features": {},
+  "features": {
+    "record-stock-movement": "1.0.0",},
   "rules": {
     "compositionRootOwner": "human",
     "aiWritablePaths": [
