@@ -69,7 +69,7 @@ import {
   checkErrorCodes,
 } from "../../../scripts/ai-contract-lib.mjs";
 import { loadConfig } from "./config";
-import { buildDeps, createAuthApp } from "./index";
+import { buildDeps, createApp } from "./index";
 import { createHttpApp } from "./adapters/http";
 
 const ROOT = join(import.meta.dirname, "..", "..", ".."); // src/groups/auth-service → 项目根
@@ -84,8 +84,8 @@ function bizAppFor(): Hono {
   const cfg = loadConfig(); // 每次读配置（含本地文件），校验失败会 fail fast
   const version = JSON.stringify(cfg);
   if (!bizCache || bizCache.version !== version) {
-    bizCache = { version, app: createHttpApp(createAuthApp(buildDeps(cfg))) };
-    console.log(`[admin] 业务实例已重建（配置版本变更）: USER_STORE=${cfg.USER_STORE}`);
+    bizCache = { version, app: createHttpApp(createApp(buildDeps(cfg))) };
+    console.log(`[admin] 业务实例已重建（配置版本变更: ${version.slice(0, 40)}…）`);
   }
   return bizCache.app;
 }
@@ -738,7 +738,7 @@ app.post("/admin/api/play", async (c) => {
       status: res.status,
       body: await res.text(),
       setCookie: res.headers.get("set-cookie") ?? null,
-      storageMode: loadConfig().USER_STORE, // 附带回当前存储模式，前端展示
+      health: true, // 空框架：业务路由由流水线生成后自动可用
     });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);

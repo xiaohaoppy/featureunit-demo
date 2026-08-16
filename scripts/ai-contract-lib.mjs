@@ -75,9 +75,6 @@ export const CONFIG_KEYS = [
   { key: "AI_MODEL", label: "AI 模型名（保存时自动从 API 获取列表）", secret: false, fallback: "deepseek-v4-flash", options: ["deepseek-v4-flash", "deepseek-v4-pro"] },
   { key: "AI_REASONING", label: "推理等级（low=快/省 high=深度推理）", secret: false, fallback: "medium", options: ["low", "medium", "high"] },
   { key: "PORT", label: "业务服务端口", secret: false, fallback: "3000" },
-  { key: "USER_STORE", label: "存储模式", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
-  { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/auth-service.db" },
-  { key: "DATA_DIR", label: "JSON 文件存储目录（file 模式）", secret: false, fallback: "./data" },
   { key: "SESSION_TTL_DAYS", label: "会话有效期（天）", secret: false, fallback: "30" },
   { key: "RESET_TOKEN_TTL_MINUTES", label: "重置 token 有效期（分钟）", secret: false, fallback: "30" },
   { key: "RATE_LIMIT_MAX", label: "找回密码限流（次/窗口）", secret: false, fallback: "3" },
@@ -538,28 +535,50 @@ export function generateWiring(name, group = GROUP) {
   const results = [];
 
   // ── ① index.ts（组合根）────────────────────────────────────────────
+  // 锚点双策略：完整组合根（含 resetPassword 业务锚点）或空骨架（health 通用锚点）
   const index = readSourceFile("index.ts");
   if (index && !wiring.checks[0].ok) {
     let next = index;
-    next = insertAfter(next, `import { resetPassword } from "./features/reset-password/impl";`,
-      `import { ${c} } from "./features/${name}/impl";`);
-    next = insertAfter(next, `import type { ResetPasswordDeps } from "./features/reset-password/contract";`,
-      `import type { ${P}Deps } from "./features/${name}/contract";`);
-    next = insertAfter(next, `import { ResetPasswordInput } from "./features/reset-password/contract";`,
-      `import { ${P}Input } from "./features/${name}/contract";`);
-    next = insertAfter(next, `  resetPassword(input: unknown): Promise<void>;`,
-      `  ${c}(input: unknown): Promise<void>;`);
-    next = insertAfter(next, `    resetPassword: (input) => resetPassword(parseOrThrow(ResetPasswordInput, input), toResetPasswordDeps(deps)),`,
-      `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
     const depArgs = depsFields.length ? depsFields.map((f) => `${f}: d.${f}`).join(", ") : "logger: d.logger";
-    next = insertAfter(next, `function toResetPasswordDeps(d: AuthDeps): ResetPasswordDeps {\n  return { resetTokens: d.resetTokens, users: d.users, sessions: d.sessions, hasher: d.hasher, logger: d.logger, now: d.now };\n}`,
-      `function to${P}Deps(d: AuthDeps): ${P}Deps {\n  return { ${depArgs} };\n}`);
+    const isFull = index.includes("resetPassword");
+
+    if (isFull) {
+      // 完整组合根风格（老锚点）
+      next = insertAfter(next, `import { resetPassword } from "./features/reset-password/impl";`,
+        `import { ${c} } from "./features/${name}/impl";`);
+      next = insertAfter(next, `import type { ResetPasswordDeps } from "./features/reset-password/contract";`,
+        `import type { ${P}Deps } from "./features/${name}/contract";`);
+      next = insertAfter(next, `import { ResetPasswordInput } from "./features/reset-password/contract";`,
+        `import { ${P}Input } from "./features/${name}/contract";`);
+      next = insertAfter(next, `  resetPassword(input: unknown): Promise<void>;`,
+        `  ${c}(input: unknown): Promise<void>;`);
+      next = insertAfter(next, `    resetPassword: (input) => resetPassword(parseOrThrow(ResetPasswordInput, input), toResetPasswordDeps(deps)),`,
+        `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
+      next = insertAfter(next, `function toResetPasswordDeps(d: AuthDeps): ResetPasswordDeps {\n  return { resetTokens: d.resetTokens, users: d.users, sessions: d.sessions, hasher: d.hasher, logger: d.logger, now: d.now };\n}`,
+        `function to${P}Deps(d: AuthDeps): ${P}Deps {\n  return { ${depArgs} };\n}`);
+    } else {
+      // 空骨架风格（GroupApi/createApp/health 通用锚点）
+      const imports = `import { ${c} } from "./features/${name}/impl";
+import type { ${P}Deps } from "./features/${name}/contract";
+import { ${P}Input } from "./features/${name}/contract";`;
+      next = insertAfter(next, `import type { AppConfig } from "./config";`, imports);
+      next = insertAfter(next, `  health(): { ok: boolean };`,
+        `  ${c}(input: unknown): Promise<void>;`);
+      next = insertAfter(next, `    health: () => ({ ok: true }),`,
+        `    ${c}: (input) => ${c}(parseOrThrow(${P}Input, input), to${P}Deps(deps)),`);
+      next = insertAfter(next, `  health: () => ({ ok: true }),
+};`,
+        `function to${P}Deps(d: GroupDeps): ${P}Deps {
+  return { ${depArgs} };
+}`);
+    }
     if (next && next !== index) {
       results.push({ path: "index.ts", before: index, after: next, diffText: simpleDiff(index, next) });
     }
   }
 
   // ── ② http.ts（路由）──────────────────────────────────────────────
+  // 通用锚点：在 `return app;` 之前插入业务路由（空壳与完整版都适用）
   const http = readSourceFile("adapters/http.ts");
   if (http && !wiring.checks[4].ok) {
     const cookieLine = hasToken
@@ -574,11 +593,7 @@ ${cookieLine}    const body = (await readJson(c)) as Record<string, unknown>;
 ${callLine}
     return c.json({ ok: true });
   });`;
-    const anchor = `  app.post("/api/password-reset", async (c) => {
-    await api.resetPassword(await readJson(c));
-    deleteCookie(c, SESSION_COOKIE); // 密码已重置，旧会话 cookie 一并清掉
-    return c.json({ ok: true });
-  });`;
+    const anchor = `  return app;`;
     const next = insertAfter(http, anchor, route);
     if (next && next !== http) {
       results.push({ path: "adapters/http.ts", before: http, after: next, diffText: simpleDiff(http, next) });
@@ -588,8 +603,8 @@ ${callLine}
   // ── ③ manifest.json（版本登记）─────────────────────────────────────
   const manifest = readSourceFile("manifest.json");
   if (manifest && !wiring.checks[5].ok) {
-    const anchor = `    "reset-password": "1.0.0"`;
-    const next = insertAfter(manifest, anchor, `    "${name}": "1.0.0"`);
+    const anchor = `  "features": {`;
+    const next = insertAfter(manifest, anchor, `    "${name}": "1.0.0",`);
     if (next && next !== manifest) {
       results.push({ path: "manifest.json", before: manifest, after: next, diffText: simpleDiff(manifest, next) });
     }

@@ -590,7 +590,7 @@ $("btn-play-send").addEventListener("click", () =>
     }
     const r = await api("/admin/api/play", { method: "POST", body: JSON.stringify({ method: op.method, path: op.path, data, cookie: playCookie ?? undefined }) });
     $("play-output").textContent = `HTTP ${r.status}\n${r.body}`;
-    $("play-storage").textContent = `存储模式：${r.storageMode ?? "memory"}（「配置」面板可切换，保存后本面板自动生效）`;
+    $("play-storage").textContent = r.status === 404 ? "还没有业务路由——先用 🏠 开始页说一句话创建你的第一个功能" : "✅ 业务已就绪";
     if (r.setCookie) {
       const m = /sid=([^;]+)/.exec(r.setCookie);
       playCookie = m ? `sid=${m[1]}` : playCookie;
