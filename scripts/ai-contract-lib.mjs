@@ -1171,7 +1171,7 @@ import type { GroupApi } from "../index";
 export const SESSION_COOKIE = "sid";
 
 /** 读取并解析 JSON body；非法 JSON → INVALID_INPUT。 */
-async function readJson(c) {
+async function readJson(c: { req: { json(): Promise<unknown> } }): Promise<unknown> {
   try {
     return await c.req.json();
   } catch {
