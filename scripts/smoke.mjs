@@ -21,7 +21,23 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
-const PORT = 3101;
+
+// 动态端口：从 3101 起找空闲端口（避免残留实例串扰）
+import net from "node:net";
+async function findFreePort(start) {
+  for (let p = start; p < start + 20; p++) {
+    try {
+      const s = net.createServer();
+      const ok = await new Promise((resolve) => {
+        s.once("error", () => resolve(false));
+        s.listen(p, "127.0.0.1", () => { s.close(); resolve(true); });
+      });
+      if (ok) return p;
+    } catch { /* 继续 */ }
+  }
+  return start;
+}
+const PORT = await findFreePort(3101);
 const BASE = `http://127.0.0.1:${PORT}`;
 
 const results = [];
@@ -57,7 +73,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 启动管理台（独立端口，测试完关闭）
 // ---------------------------------------------------------------------------
 
-admin = runAsync("npx", ["tsx", "src/groups/auth-service/admin-server.ts"], { ADMIN_PORT: String(PORT) });
+admin = spawn("npx", ["tsx", "src/groups/auth-service/admin-server.ts"], {
+  cwd: ROOT, stdio: "ignore", detached: true,
+  env: { ...process.env, ADMIN_PORT: String(PORT) },
+});
 let ready = false;
 for (let i = 0; i < 30; i++) {
   await sleep(500);
@@ -66,7 +85,7 @@ for (let i = 0; i < 30; i++) {
     if (r.ok) { ready = true; break; }
   } catch { /* 等待启动 */ }
 }
-report("管理台启动（:3101）", ready, ready ? "" : "30 次重试未就绪");
+report(`管理台启动（:${PORT}）`, ready, ready ? "" : "30 次重试未就绪");
 
 // ---------------------------------------------------------------------------
 // A. 静态完整性
@@ -250,8 +269,10 @@ for (let i = 0; i < parseInt(commitCount.stdout || "0", 10); i++) {
 const dirty = run("git", ["status", "--short"]).stdout.trim();
 report("演示产物与提交已清理", dirty === "", dirty.split("\n").slice(0, 3).join(" | "));
 
-// 关闭管理台
-admin?.kill("SIGTERM");
+// 关闭管理台（杀整个进程组，避免 tsx 子进程残留）
+if (admin?.pid) {
+  try { process.kill(-admin.pid, "SIGTERM"); } catch { admin.kill("SIGTERM"); }
+}
 
 // ---------------------------------------------------------------------------
 // 汇总
