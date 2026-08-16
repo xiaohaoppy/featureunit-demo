@@ -1615,7 +1615,8 @@ export function preflightWiring(name, group = GROUP) {
   const tsc = spawnSync("npx", ["tsc", "--noEmit"], { cwd: ROOT, encoding: "utf8", timeout: 120_000 });
   for (const f of files) spawnSync("git", ["checkout", "-q", "--", join(GROUPS_DIR, group, f.path)], { cwd: ROOT });
 
-  const errors = (tsc.stdout + tsc.stderr).split("\n").filter(Boolean).length;
+  const out = (tsc.stdout + tsc.stderr).trim();
+  const errors = out ? out.split("\n").filter(Boolean).length : 0;
   return {
     ok: tsc.status === 0,
     alreadyWired: false,
@@ -1623,6 +1624,7 @@ export function preflightWiring(name, group = GROUP) {
     summary: tsc.status === 0
       ? `✅ 预演通过：接入可编译（${files.length} 个文件，tsc 全项目 0 错误）`
       : `❌ 预演失败：接入后 tsc 有 ${errors} 处错误（已自动还原，请人工检查）`,
+    detail: out.slice(0, 4000),
   };
 }
 
