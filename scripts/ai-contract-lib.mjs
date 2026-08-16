@@ -537,7 +537,7 @@ export function generateWiring(name, group = GROUP) {
 
   // ── ① index.ts（组合根）────────────────────────────────────────────
   // 锚点双策略：完整组合根（含 resetPassword 业务锚点）或空骨架（health 通用锚点）
-  const index = readSourceFile("index.ts");
+  const index = readSourceFile("index.ts", group);
   if (index && !wiring.checks[0].ok) {
     let next = index;
     const depArgs = depsFields.length ? depsFields.map((f) => `${f}: d.${f}`).join(", ") : "logger: d.logger";
@@ -585,7 +585,7 @@ import { ${P}Input } from "./features/${name}/contract";`;
 
   // ── ② http.ts（路由）──────────────────────────────────────────────
   // 通用锚点：在 `return app;` 之前插入业务路由（空壳与完整版都适用）
-  const http = readSourceFile("adapters/http.ts");
+  const http = readSourceFile("adapters/http.ts", group);
   if (http && !wiring.checks[4].ok) {
     const cookieLine = hasToken
       ? `    const token = getCookie(c, SESSION_COOKIE);\n    if (!token) throw new AppError(ErrorCodes.INVALID_SESSION, 401);\n`
@@ -607,7 +607,7 @@ ${callLine}
   }
 
   // ── ③ manifest.json（版本登记）─────────────────────────────────────
-  const manifest = readSourceFile("manifest.json");
+  const manifest = readSourceFile("manifest.json", group);
   if (manifest && !wiring.checks[5].ok) {
     const anchor = `  "features": {`;
     const next = insertAfter(manifest, anchor, `    "${name}": "1.0.0",`);
@@ -1112,16 +1112,15 @@ const NEW_GROUP_INDEX = (name) => `/**
  * [角色] 组合根：${name} —— 骨架（人维护，AI 禁止触碰）
  * ----------------------------------------------------------------------------
  * 新组从空 API 开始。接入第一个功能单元时：
- *   1. 参照 auth-service/index.ts 的接入模式（import → GroupApi → createApp → toXDeps）；
- *   2. 管理台「一键接入」的锚点目前面向 auth-service——新组第一个单元请人工接入，
- *      之后可扩展锚点支持多组；
- *   3. 接入完跑总闸（npm run check）确认。
+ *   1. 管理台「一键接入」支持空骨架锚点（本骨架 + adapters/http.ts + manifest）；
+ *   2. 接入完跑总闸（npm run check）确认。
  * ============================================================================
  */
 
 import { z } from "zod";
 import { AppError, ErrorCodes } from "./ports/errors";
-import { consoleLogger, type Logger } from "./ports/logger";
+import type { Logger } from "./ports/logger";
+import { createFileLogger } from "./adapters/file-logger";
 import type { AppConfig } from "./config";
 
 /** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
@@ -1132,7 +1131,8 @@ export interface GroupDeps {
 
 /** 组装依赖——"换基础设施"的唯一位置。 */
 export function buildDeps(config: AppConfig, overrides: Partial<GroupDeps> = {}): GroupDeps {
-  return { logger: consoleLogger, now: () => new Date(), ...overrides };
+  // 日志落盘到 LOG_DIR/app.log（配置面板可控制；consoleLogger 可注入覆盖）
+  return { logger: createFileLogger(config.LOG_DIR), now: () => new Date(), ...overrides };
 }
 
 /** 边界校验：zod parse 全部发生在组合根这一层（单元内部假定输入已合法）。 */
@@ -1167,6 +1167,8 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { AppError, ErrorCodes } from "../ports/errors";
+import { recordError } from "./file-logger";
+import { loadConfig } from "../config";
 import type { GroupApi } from "../index";
 
 /** 会话 cookie 名（接入生成的"从 cookie 取 token"路由使用）。 */
@@ -1185,6 +1187,7 @@ export function createHttpApp(api: GroupApi): Hono {
   const app = new Hono();
 
   app.onError((err, c) => {
+    recordError(loadConfig().ERROR_LOG_DIR, err, { route: c.req.path });
     if (err instanceof AppError) {
       return c.json({ error: err.code }, err.status as ContentfulStatusCode);
     }
@@ -1209,8 +1212,18 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const EnvSchema = z.object({
-  /** 业务服务数据接口。 */
+  /** 业务服务监听端口。 */
   PORT: z.coerce.number().int().positive().default(3000),
+  /** 数据存储模式：memory（内存）| file（JSON 文件）| sqlite（真库）。框架级配置，业务功能的数据存储按此接入。 */
+  USER_STORE: z.enum(["memory", "file", "sqlite"]).default("memory"),
+  /** USER_STORE=file 时的数据目录（相对项目根）。 */
+  DATA_DIR: z.string().default("./data"),
+  /** USER_STORE=sqlite 时的数据库文件（相对项目根）。 */
+  SQLITE_PATH: z.string().default("./data/app.db"),
+  /** 业务日志落盘目录（相对项目根）：info/warn/error 写 app.log（JSON lines），与数据/错误分开。 */
+  LOG_DIR: z.string().default("./data/logs"),
+  /** 错误记录目录（相对项目根）：异常单独写 errors.log（错误码/消息/堆栈），与业务日志分开。 */
+  ERROR_LOG_DIR: z.string().default("./data/errors"),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
@@ -1279,6 +1292,7 @@ export function createGroup(name) {
   // 通用数据接口从 auth-service 复制（错误协议与日志数据接口全组一致，保证错误码/日志语义统一）
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "errors.ts"), join(dir, "ports", "errors.ts"));
   copyFileSync(join(GROUPS_DIR, GROUP, "ports", "logger.ts"), join(dir, "ports", "logger.ts"));
+  copyFileSync(join(GROUPS_DIR, GROUP, "adapters", "file-logger.ts"), join(dir, "adapters", "file-logger.ts"));
 
   writeFileSync(join(dir, "index.ts"), NEW_GROUP_INDEX(name));
   writeFileSync(join(dir, "adapters", "http.ts"), NEW_GROUP_HTTP);
