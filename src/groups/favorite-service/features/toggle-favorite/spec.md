@@ -1,22 +1,22 @@
-# 功能规格规格：toggle-favorite（v0.1-draft）
-
-<!-- 按 docs/contract-template.md 六要素填写 -->
+# 功能规格规格：toggle-favorite（v0.1-draft，模拟 AI 生成）
 
 ## 1. 一句话目标
-TODO
+支持用户收藏商品
 
 ## 2. 输入
-TODO
+- token：会话凭证
+- payload：业务参数（待定）
 
 ## 3. 输出
-TODO
+成功 → void
 
 ## 4. 错误码
-TODO
+（待补）
 
 ## 5. 数据接口
-TODO
+- users: UserStore
+- sessions: SessionStore
+- logger: Logger
 
 ## 6. 不变量 / 边界情况
-- TODO（≥3 条，条条可测）
-- 【不】负责：TODO
+- token 有效时执行
