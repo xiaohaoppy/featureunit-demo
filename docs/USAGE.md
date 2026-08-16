@@ -5,15 +5,16 @@
 
 ---
 
-## 一、两个入口
+## 一、三个入口
 
 | 入口 | 命令 | 作用 | 谁用 |
 |---|---|---|---|
 | **管理台** | `npm run admin` | 网页界面管理一切（:3001/admin） | 人（日常主力） |
 | **CLI** | `npm run feat -- <命令>` | 终端里的全部操作 | 人 / 脚本 |
+| **业务服务** | `npm run dev` | 生成的功能路由的真实访问入口（:3000） | 浏览器 / 前端 / 联调 |
 
-两者共用同一套核心逻辑（`scripts/ai-contract-lib.mjs`），行为一致。
-业务服务（HTTP :3000）目前是空框架没有入口，第一个功能接入后由你按需添加 `dev` 脚本。
+三者共用同一套核心逻辑（`scripts/ai-contract-lib.mjs`），行为一致。
+业务服务按组启动：`GROUP=order-service npm run dev`（默认 auth-service）。
 
 ---
 
@@ -100,6 +101,13 @@ npm run admin        # 打开 http://localhost:3001/admin
 - 数据类端口（如 `favorite-item`）定义业务语义，组合根 `toXDeps` 把它们绑定到 `d.kv` 之上；
 - 「配置」tab 底部「🔌 数据接口 × 存储对接自检」：写→读→删 一键验证当前模式已接通（换模式后保存即自检）。
 
+### 生成的业务怎么访问
+
+| 方式 | 说明 |
+|---|---|
+| 管理台 🧪 业务测试 | 内部实例，随手冒烟（操作动态发现，业务系统下拉切换） |
+| `npm run dev` | **真实业务服务**（:3000）——接入的功能路由直接可访问：`http://localhost:3000/api/<功能名>`；多业务系统：`GROUP=<组名> npm run dev` |
+
 ### 业务测试面板（动态发现）
 
 - 操作列表**不是写死的**：健康检查 + manifest 里每个已接入功能自动生成一条 POST 冒烟（示例请求体按功能规格字段自动推断）；
@@ -129,6 +137,7 @@ export AI_REASONING=medium
 ```bash
 npm run check                          # 总闸：tsc + 全部测试
 npm run admin                          # 管理台 :3001/admin
+npm run dev                            # 业务服务 :3000（GROUP=<组名> 切换业务系统）
 npm run migrate                        # SQLite 建表（USER_STORE=sqlite 时）
 
 npm run feat -- new-group <组名>        # 创建新业务系统骨架

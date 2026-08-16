@@ -285,6 +285,23 @@ feat = run("node", ["scripts/feat.mjs", "ticket", "smoke-cli-unit"]);
 report("feat ticket（打印任务单）", feat.status === 0 && feat.stdout.includes("impl.ts"), "OK");
 rmSync(join(ROOT, "src/groups/auth-service/features/smoke-cli-unit"), { recursive: true, force: true });
 
+// 业务服务入口（npm run dev）：组感知，真实监听端口，生成的功能路由从这里访问
+const devPort = await findFreePort(3150);
+const devSrv = spawn("npx", ["tsx", "scripts/dev-server.ts"], {
+  cwd: ROOT, stdio: "ignore", detached: true,
+  env: { ...process.env, PORT: String(devPort) },
+});
+let devOk = false;
+for (let i = 0; i < 20; i++) {
+  await sleep(300);
+  try {
+    const r = await fetch(`http://127.0.0.1:${devPort}/api/health`);
+    if (r.ok) { devOk = true; break; }
+  } catch { /* 等待启动 */ }
+}
+report("业务服务入口（npm run dev）", devOk, devOk ? `:${devPort}/api/health → 200` : "未就绪");
+try { process.kill(-devSrv.pid, "SIGTERM"); } catch { /* 已退出 */ }
+
 let migrate = run("npx", ["tsx", "scripts/migrate.ts"], { USER_STORE: "sqlite" });
 report("npm run migrate（sqlite 建库）", migrate.status === 0 && /framework_meta/.test(migrate.stdout), (migrate.stdout.match(/表:.*/) ?? [""])[0]);
 

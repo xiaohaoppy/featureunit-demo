@@ -38,6 +38,7 @@
 npm install
 npm run check     # 总闸：类型检查 + 全部测试（应全绿）
 npm run admin     # 管理台：http://localhost:3001/admin（推荐入口）
+npm run dev       # 业务服务：http://localhost:3000（访问生成的功能路由）
 npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 ```
 
@@ -114,3 +115,4 @@ npm run feat -- ticket <名字>           # 打印 AI 任务单
 | 新业务系统？ | `feat new-group` 或面板 ＋，自动生成骨架（通用数据接口/存储适配器复制） |
 | 为什么每个产物都进 git？ | 人要为 AI 的产品负责——每个动作可追溯（也让"界面操作"可审计） |
 | 业务测试面板怎么没有我的功能？ | 面板操作是动态发现的——功能接入后自动出现；用「业务系统」下拉切换组 |
+| 生成的业务怎么访问？ | ① 管理台 🧪 业务测试面板（内部实例，随手冒烟）；② **`npm run dev`** 起真实业务服务（默认 :3000），浏览器/前端直接访问 `http://localhost:3000/api/<功能名>`；多业务系统用 `GROUP=<组名> npm run dev` |

@@ -15,7 +15,8 @@
     "admin": "tsx src/groups/auth-service/admin-server.ts",
     "migrate": "tsx scripts/migrate.ts",
     "smoke": "node scripts/smoke.mjs",
-    "feat": "node scripts/feat.mjs"
+    "feat": "node scripts/feat.mjs",
+    "dev": "tsx scripts/dev-server.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

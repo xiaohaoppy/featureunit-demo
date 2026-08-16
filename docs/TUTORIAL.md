@@ -129,7 +129,8 @@ npm run feat -- ticket create-order    # 打印任务单
 
 ```bash
 npm run check    # tsc + 全部测试
-# 冒烟：管理台 🧪 业务测试（操作动态发现——接入后自动出现，用「业务系统」下拉切换组）
+npm run dev      # 真实业务服务 :3000——访问 http://localhost:3000/api/<功能名>
+# 或管理台 🧪 业务测试（操作动态发现——接入后自动出现，用「业务系统」下拉切换组）
 ```
 
 ---
