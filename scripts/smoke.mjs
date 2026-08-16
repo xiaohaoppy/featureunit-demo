@@ -26,6 +26,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
 
 const results = [];
 let admin = null;
+// 冒烟开始时记录 HEAD（清理时回到这里，撤销冒烟产生的提交）
+const BASE_HEAD = run("git", ["log", "-1", "--format=%H"]).stdout.trim();
 
 function report(name, ok, detail = "") {
   results.push({ name, ok });
@@ -158,7 +160,7 @@ if (ready) {
   const reviews = Array(10).fill(true);
   r = await api("/admin/api/ai/freeze", { method: "POST", body: JSON.stringify({ name: "smoke-unit", reviews }) });
   report("功能规格定稿", r.data.frozen === true, r.data.message ?? "");
-  r = await api("/admin/api/ai/generate", { method: "POST", body: JSON.stringify({ name: "smoke-unit", requirement: "x", mock: true }) });
+  r = await api("/admin/api/ai/generate", { method: "POST", body: JSON.stringify({ name: "smoke-unit", requirement: "再次生成覆盖测试", mock: true }) });
   report("定稿守卫（拒绝覆盖）", r.status !== 200 && /已定稿/.test(r.data.error ?? ""), r.data.error ?? "");
 }
 
@@ -207,7 +209,7 @@ describe("toggle-favorite 单元判据", () => {
 
   r = await api("/admin/api/pipeline/confirm", { method: "POST", body: JSON.stringify({ approved: true }) });
   const doneOk = r.data.step === "done" && (r.data.error ?? "") === "";
-  report("⑥ 接入确认 → 完成", doneOk, r.data.error ?? r.data.artifact?.apply?.message ?? "");
+  report("⑥ 接入确认 → 完成", doneOk, (r.data.error ?? r.data.artifact?.apply?.message ?? "").slice(0, 120));
 }
 
 // ---------------------------------------------------------------------------
@@ -215,8 +217,11 @@ describe("toggle-favorite 单元判据", () => {
 // ---------------------------------------------------------------------------
 
 console.log("\n── E. CLI 与迁移 ──");
-let feat = run("node", ["scripts/feat.mjs", "ticket", "login"]);
-report("feat ticket（打印任务单）", feat.status === 0 && /功能规格/.test(feat.stdout) === false && feat.stdout.includes("impl.ts"), "OK");
+let feat = run("node", ["scripts/feat.mjs", "new", "smoke-cli-unit"]);
+report("feat new（CLI 建功能）", feat.status === 0, feat.stderr?.slice(0, 60) ?? "");
+feat = run("node", ["scripts/feat.mjs", "ticket", "smoke-cli-unit"]);
+report("feat ticket（打印任务单）", feat.status === 0 && feat.stdout.includes("impl.ts"), "OK");
+rmSync(join(ROOT, "src/groups/auth-service/features/smoke-cli-unit"), { recursive: true, force: true });
 
 let migrate = run("npx", ["tsx", "scripts/migrate.ts"], { USER_STORE: "sqlite" });
 report("npm run migrate（sqlite 建库）", migrate.status === 0 && /framework_meta/.test(migrate.stdout), (migrate.stdout.match(/表:.*/) ?? [""])[0]);
@@ -228,15 +233,13 @@ report("npm run migrate（sqlite 建库）", migrate.status === 0 && /framework_
 console.log("\n── 清理 ──");
 const cleanDirs = ["src/groups/smoke-group", "src/groups/favorite-service", "data"];
 for (const d of cleanDirs) rmSync(join(ROOT, d), { recursive: true, force: true });
-// 撤销冒烟期间产生的提交（定稿/编辑/接入等），回到冒烟前 HEAD
-const baseHead = run("git", ["log", "-1", "--format=%H"]);
-spawnSync("git", ["add", "-A"], { cwd: ROOT });
-const commitCount = run("git", ["rev-list", "--count", "HEAD", "--not", baseHead.stdout.trim()]);
+// 撤销冒烟期间产生的提交，回到冒烟前 HEAD（安全：冒烟开始前工作区干净）
+const commitCount = run("git", ["rev-list", "--count", "HEAD", "--not", BASE_HEAD]);
 for (let i = 0; i < parseInt(commitCount.stdout, 10); i++) {
   spawnSync("git", ["reset", "-q", "--hard", "HEAD~1"], { cwd: ROOT });
 }
 spawnSync("git", ["clean", "-q", "-fd", "--", "src/groups/", "data/"], { cwd: ROOT });
-report("演示产物与提交已清理", run("git", ["status", "--short"]).stdout.trim() === "", "");
+report("演示产物与提交已清理", run("git", ["status", "--short"]).stdout.trim() === "", run("git", ["status", "--short"]).stdout.trim().split("\n").slice(0, 3).join(" | "));
 
 // 关闭管理台
 admin?.kill("SIGTERM");
