@@ -1,5 +1,5 @@
 {
-  "name": "featureunit-auth-demo",
+  "name": "featureunit-demo",
   "version": "0.1.0",
   "private": true,
   "description": "FeatureUnit 框架演示：AI 友好的功能单元 + 服务组（登录系统）",
