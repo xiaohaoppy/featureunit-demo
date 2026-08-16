@@ -1,34 +1,37 @@
 /**
- * [角色] 功能单元：record-stock-movement —— 功能规格（定稿区）
- * 谁可以改：只有人（功能规格演进流程）。AI 实现任务中【禁止】修改本文件。
- * 填写指南：docs/contract-template.md（六要素）
+ * [角色] 功能单元：record-stock-movement —— 功能规格（人补全 v1）
  */
 
 import { z } from "zod";
+import type { Logger } from "../../ports/logger";
+import type { KVStore } from "../../../adapters/storage";
 
-// TODO(人/功能规格设计师)：定义输入 schema（含边界规则，见模板第 2 节）
 export const RecordStockMovementInput = z.object({
-  // example: email: z.string().email(),
+  /** 商品 SKU */
+  sku: z.string().min(1).max(64),
+  /** 变动数量：正=入库，负=出库，禁止 0 */
+  delta: z.number().int().min(-100000).max(100000).refine((v) => v !== 0, "delta 不能为 0"),
+  /** 操作人标识（业务层约定；本单元不校验身份） */
+  operatorId: z.string().min(1).max(64),
 });
 
 export type RecordStockMovementInput = z.infer<typeof RecordStockMovementInput>;
 
-// TODO：声明依赖数据接口（只允许纯数据 + 接口，禁止 ORM/HTTP/框架类型）
 export interface RecordStockMovementDeps {
-  // example: users: UserStore;
-}
-
-export interface RecordStockMovementResult {
-  // example: ok: true;
+  logger: Logger;
+  /** 数据存储：变动记录持久化（组合根绑定 kv，USER_STORE 可切换） */
+  kv: KVStore;
 }
 
 export interface RecordStockMovement {
-  (input: RecordStockMovementInput, deps: RecordStockMovementDeps): Promise<RecordStockMovementResult>;
+  (input: RecordStockMovementInput, deps: RecordStockMovementDeps): Promise<void>;
 }
 
 /**
- * 不变量（≥3 条，条条可被测试断言；impl.test.ts 会逐条验证）：
- * 1. TODO
- * 2. TODO
- * 3. TODO
+ * 不变量：
+ * 1. 每条变动记录写入 kv：键 "stock:<sku>:<ts>"，值为 JSON（sku/delta/operatorId/ts）
+ * 2. 同一 sku 的多次变动互不覆盖（键含时间戳，追加式）
+ * 3. delta 为 0 → 抛 AppError(INVALID_INPUT)
+ * 4. 记录含时间戳，时间来自注入的 now（测试可固定）
+ * 5. 【不】负责：库存余额计算、权限校验
  */
