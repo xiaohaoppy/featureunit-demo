@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "owner": "human",
   "features": {
-    "record-stock-movement": "1.0.0",},
+    "record-stock-movement": "1.0.0"
+  },
   "rules": {
     "compositionRootOwner": "human",
     "aiWritablePaths": [

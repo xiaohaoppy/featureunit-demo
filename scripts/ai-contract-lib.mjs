@@ -610,12 +610,21 @@ ${anchor}`);
   }
 
   // ── ③ manifest.json（版本登记）─────────────────────────────────────
+  // 结构化更新：parse → features 登记 → 重新 stringify。
+  // （旧实现是文本插入带尾逗号的行，JSON 尾逗号非法——tsc 不查 JSON，
+  //   直到业务测试面板 listPlayOps 读 manifest 才暴露。）
   const manifest = readSourceFile("manifest.json", group);
   if (manifest && !wiring.checks[5].ok) {
-    const anchor = `  "features": {`;
-    const next = insertAfter(manifest, anchor, `    "${name}": "1.0.0",`);
-    if (next && next !== manifest) {
-      results.push({ path: "manifest.json", before: manifest, after: next, diffText: simpleDiff(manifest, next) });
+    try {
+      const obj = JSON.parse(manifest);
+      obj.features = obj.features ?? {};
+      obj.features[name] = "1.0.0";
+      const next = JSON.stringify(obj, null, 2) + "\n";
+      if (next !== manifest) {
+        results.push({ path: "manifest.json", before: manifest, after: next, diffText: simpleDiff(manifest, next) });
+      }
+    } catch {
+      results.push({ path: "manifest.json", before: manifest, after: manifest, diffText: "⚠️ manifest.json 不是合法 JSON，无法自动登记（请人工修复）" });
     }
   }
 
