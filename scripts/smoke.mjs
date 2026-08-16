@@ -173,6 +173,11 @@ if (ready) {
       paths.logDir !== paths.errorLogDir && paths.logDir !== paths.dataDir,
     `数据=${paths.dataDir} 日志=${paths.logDir} 错误=${paths.errorLogDir}`);
 
+  // 数据接口 × 存储对接：组合根注入的 KV 存储写→读→删自检
+  r = await api("/admin/api/storage/probe");
+  report("存储对接自检（组合根→KV 存储）", r.status === 200 && r.data.ok === true,
+    `${r.data.mode}: ${r.data.message}`);
+
   // 新建业务系统（冒烟组）
   r = await api("/admin/api/groups", { method: "POST", body: JSON.stringify({ name: "smoke-group" }) });
   report("新建业务系统", r.status === 200, r.data.error ?? "");

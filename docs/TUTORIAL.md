@@ -169,6 +169,9 @@ npm run migrate                       # SQLite 建表（幂等，framework_meta 
 业务日志（`LOG_DIR`→`app.log`）、错误记录（`ERROR_LOG_DIR`→`errors.log`）三个位置互不混放——
 管理台「配置」tab 底部会实时显示三个位置的目录与现有文件。
 
+**数据接口 × 存储对接**：组合根注入通用 KV 存储，`USER_STORE` 一行切换 memory/file/sqlite；
+「配置」tab 底部的「对接自检」在当前模式下做写→读→删，验证数据接口经组合根已真正落到存储。
+
 ---
 
 ## 第 5 步：AI 配置

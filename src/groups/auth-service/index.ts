@@ -13,12 +13,15 @@ import { z } from "zod";
 import { AppError, ErrorCodes } from "./ports/errors";
 import type { Logger } from "./ports/logger";
 import { createFileLogger } from "./adapters/file-logger";
+import { createKVStore, type KVStore } from "./adapters/storage";
 import type { AppConfig } from "./config";
 
 /** 全组依赖（由 buildDeps 组装；测试可用 overrides 替换任意一个）。 */
 export interface GroupDeps {
   logger: Logger;
   now: () => Date;
+  /** 数据存储（按 USER_STORE 切换 memory/file/sqlite）——数据类端口经组合根绑定到它。 */
+  kv: KVStore;
 }
 
 /** 组装依赖——"换基础设施"的唯一位置（业务出现后在这里接适配器）。 */
@@ -27,6 +30,8 @@ export function buildDeps(config: AppConfig, overrides: Partial<GroupDeps> = {})
     // 日志落盘到 LOG_DIR/app.log（配置面板可控制；consoleLogger 可注入覆盖）
     logger: createFileLogger(config.LOG_DIR),
     now: () => new Date(),
+    // 数据存储：USER_STORE 一行切换 memory/file/sqlite（配置面板可控制）
+    kv: createKVStore(config),
     ...overrides,
   };
 }

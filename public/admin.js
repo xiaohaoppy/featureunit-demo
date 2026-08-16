@@ -1019,7 +1019,22 @@ function renderStorageOverview(p) {
         <div class="hint">目录：${escapeHtml(p.errorLogDir)}</div>
         ${fileLine(p.errorFiles, p.errorLogDir)}
       </div>
+    </div>
+    <div class="review-item" id="storage-probe">
+      <div style="flex:1"><div style="font-weight:600">🔌 数据接口 × 存储对接自检</div><div class="hint">检测中…</div></div>
     </div>`;
+  api("/admin/api/storage/probe")
+    .then((r) => {
+      const box = $("storage-probe");
+      if (!box) return;
+      const cls = r.ok ? "msg ok" : "msg err";
+      box.innerHTML = `<div style="flex:1"><div style="font-weight:600">🔌 数据接口 × 存储对接自检 <code style="color:var(--muted)">USER_STORE=${escapeHtml(r.mode)}</code></div>
+        <div class="${cls}" style="margin-top:4px">${escapeHtml(r.message)}</div></div>`;
+    })
+    .catch((e) => {
+      const box = $("storage-probe");
+      if (box) box.innerHTML = `<div style="flex:1"><div style="font-weight:600">🔌 存储对接自检</div><div class="msg err">自检失败：${escapeHtml(e.message)}</div></div>`;
+    });
 }
 
 $("btn-config-save").addEventListener("click", () =>

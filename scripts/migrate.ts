@@ -23,13 +23,18 @@ mkdirSync(dirname(dbPath), { recursive: true });
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 
-// 框架元数据表（业务表由流水线生成的数据接口自动演进）
+// 框架元数据表 + 通用 KV 存储表（storage 适配器使用同一张表；业务表由数据接口自动演进）
 db.exec(`
 CREATE TABLE IF NOT EXISTS framework_meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 INSERT OR IGNORE INTO framework_meta (key, value) VALUES ('schema_version', '1');
+
+CREATE TABLE IF NOT EXISTS kv (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `);
 
 const tables = db

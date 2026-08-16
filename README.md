@@ -56,6 +56,8 @@ npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 
 **存储位置分离**（配置面板可独立控制）：业务数据（`DATA_DIR`/`SQLITE_PATH`）、业务日志（`LOG_DIR`→`app.log`）、错误记录（`ERROR_LOG_DIR`→`errors.log`）三个位置互不混放。
 
+**数据接口 × 存储对接**：组合根 `buildDeps` 注入通用 KV 存储（`USER_STORE` 一行切换 memory/file/sqlite），数据类端口（如收藏条目存储）经组合根绑定到它；「配置」面板底部有**对接自检**（写→读→删），换存储模式后点保存即可验证。
+
 ## 四、核心流程（完整故事线）
 
 ```

@@ -120,3 +120,59 @@ describe("存储分离（日志 / 错误 / 数据 独立落盘）", () => {
     expect(readFileSync(join(errDir, "errors.log"), "utf8")).not.toContain('"level"');
   });
 });
+
+describe("数据接口 × 存储对接（USER_STORE 三模式）", () => {
+  const base = { PORT: 3000, USER_STORE: "memory" as const, DATA_DIR: "", SQLITE_PATH: "", LOG_DIR: "", ERROR_LOG_DIR: "" };
+
+  it("memory 模式：写→读→删→前缀扫描", async () => {
+    const { createKVStore } = await import("./groups/auth-service/adapters/storage");
+    const store = createKVStore({ ...base, USER_STORE: "memory" });
+    await store.set("favorite:t1:item-1", "v1");
+    await store.set("favorite:t1:item-2", "v2");
+    await store.set("order:o1", "v3");
+    expect(await store.get("favorite:t1:item-1")).toBe("v1");
+    expect(await store.get("nope")).toBeNull();
+    expect(await store.listKeys("favorite:t1:")).toEqual(["favorite:t1:item-1", "favorite:t1:item-2"]);
+    await store.del("favorite:t1:item-1");
+    expect(await store.get("favorite:t1:item-1")).toBeNull();
+    await store.del("不存在"); // 幂等
+  });
+
+  it("file 模式：持久化到 DATA_DIR/kv.json（写→重建实例→仍在）", async () => {
+    const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "fu-kv-file-"));
+    try {
+      const cfg = { ...base, USER_STORE: "file" as const, DATA_DIR: dir };
+      const { createKVStore } = await import("./groups/auth-service/adapters/storage");
+      await createKVStore(cfg).set("k1", "persisted");
+      const again = createKVStore(cfg); // 模拟重启：新实例读同一文件
+      expect(await again.get("k1")).toBe("persisted");
+      expect(readFileSync(join(dir, "kv.json"), "utf8")).toContain("persisted");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("sqlite 模式：建 kv 表（幂等）并读写", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    const dir = mkdtempSync(join(tmpdir(), "fu-kv-sqlite-"));
+    try {
+      const cfg = { ...base, USER_STORE: "sqlite" as const, SQLITE_PATH: join(dir, "test.db") };
+      const { createKVStore } = await import("./groups/auth-service/adapters/storage");
+      const store = createKVStore(cfg);
+      await store.set("k1", "sqlite-v");
+      expect(await store.get("k1")).toBe("sqlite-v");
+      expect(await store.listKeys()).toEqual(["k1"]);
+      const again = createKVStore(cfg); // 幂等建表 + 数据仍在
+      expect(await again.get("k1")).toBe("sqlite-v");
+      await again.del("k1");
+      expect(await again.get("k1")).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

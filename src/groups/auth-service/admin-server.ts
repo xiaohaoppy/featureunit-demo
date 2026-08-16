@@ -781,6 +781,31 @@ app.post("/admin/api/play", async (c) => {
   }
 });
 
+/** 存储对接自检：在当前 USER_STORE 下写→读→删，验证"组合根→存储适配器"三层已接通。 */
+app.get("/admin/api/storage/probe", async (c) => {
+  try {
+    const cfg = loadConfig();
+    const deps = buildDeps(cfg);
+    const probeKey = `fu-probe:${Date.now()}`;
+    await deps.kv.set(probeKey, "ok");
+    const read = await deps.kv.get(probeKey);
+    await deps.kv.del(probeKey);
+    const keys = (await deps.kv.listKeys()).length;
+    const ok = read === "ok";
+    return c.json({
+      mode: cfg.USER_STORE,
+      ok,
+      keys,
+      message: ok ? `存储对接正常（${cfg.USER_STORE}）：写→读→删 全通过` : `存储读写异常（read=${read}）`,
+    });
+  } catch (err) {
+    return c.json(
+      { mode: loadConfig().USER_STORE, ok: false, message: err instanceof Error ? err.message : String(err) },
+      500,
+    );
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Ticket 与源码浏览
 // ---------------------------------------------------------------------------

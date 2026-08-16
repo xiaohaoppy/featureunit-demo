@@ -93,6 +93,13 @@ npm run admin        # 打开 http://localhost:3001/admin
 
 三者相互独立、互不混放；在「配置」tab 分别修改后保存即生效（页面底部实时显示三个位置的现有文件）。
 
+### 数据接口 × 存储对接
+
+- 组合根 `buildDeps` 注入通用 KV 存储（`adapters/storage.ts`），按 `USER_STORE` 选择实现：
+  `memory`（Map）→ `file`（`DATA_DIR/kv.json`）→ `sqlite`（`kv` 表，migrate 建表，幂等）；
+- 数据类端口（如 `favorite-item`）定义业务语义，组合根 `toXDeps` 把它们绑定到 `d.kv` 之上；
+- 「配置」tab 底部「🔌 数据接口 × 存储对接自检」：写→读→删 一键验证当前模式已接通（换模式后保存即自检）。
+
 ### 接真实 AI（唯一需要的配置）
 
 ```bash
