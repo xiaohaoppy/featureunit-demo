@@ -16,7 +16,8 @@
     "migrate": "tsx scripts/migrate.ts",
     "smoke": "node scripts/smoke.mjs",
     "feat": "node scripts/feat.mjs",
-    "dev": "tsx scripts/dev-server.ts"
+    "dev": "tsx scripts/dev-server.ts",
+    "start": "tsx scripts/dev-server.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

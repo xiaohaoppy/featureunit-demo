@@ -11,7 +11,7 @@
 |---|---|---|---|
 | **管理台** | `npm run admin` | 网页界面管理一切（:3001/admin） | 人（日常主力） |
 | **CLI** | `npm run feat -- <命令>` | 终端里的全部操作 | 人 / 脚本 |
-| **业务服务** | `npm run dev` | 生成的功能路由的真实访问入口（:3000） | 浏览器 / 前端 / 联调 |
+| **业务服务** | `npm run dev`（开发）/ `npm start`（生产） | 生成的功能路由的真实访问入口（:3000） | 浏览器 / 前端 / 联调 / 部署 |
 
 三者共用同一套核心逻辑（`scripts/ai-contract-lib.mjs`），行为一致。
 业务服务按组启动：`GROUP=order-service npm run dev`（默认 auth-service）。
@@ -101,6 +101,20 @@ npm run admin        # 打开 http://localhost:3001/admin
 - 数据类端口（如 `favorite-item`）定义业务语义，组合根 `toXDeps` 把它们绑定到 `d.kv` 之上；
 - 「配置」tab 底部「🔌 数据接口 × 存储对接自检」：写→读→删 一键验证当前模式已接通（换模式后保存即自检）。
 
+### 正式部署
+
+```bash
+npm ci && npm run check                        # 装依赖 + 自检
+export PORT=8080 GROUP=order-service           # 端口与业务系统
+export USER_STORE=sqlite SQLITE_PATH=./data/app.db
+export LOG_DIR=./data/logs ERROR_LOG_DIR=./data/errors
+npm run migrate                                 # 建表（sqlite）
+npm start                                       # 生产启动
+pm2 start npm --name featureunit -- run start   # 或 systemd 托管
+```
+
+说明：本项目与管理台一样用 tsx 直跑（源码即产物）——ESM + 无扩展名 import 的编译产物无法被 node 直接运行，刻意不做 dist 构建，避免"编译产物与源码行为不一致"；多业务系统 = 每组一个进程。
+
 ### 生成的业务怎么访问
 
 | 方式 | 说明 |
@@ -137,7 +151,7 @@ export AI_REASONING=medium
 ```bash
 npm run check                          # 总闸：tsc + 全部测试
 npm run admin                          # 管理台 :3001/admin
-npm run dev                            # 业务服务 :3000（GROUP=<组名> 切换业务系统）
+npm run dev / start                    # 业务服务 :3000（开发/生产；GROUP=<组名> 切换业务系统）
 npm run migrate                        # SQLite 建表（USER_STORE=sqlite 时）
 
 npm run feat -- new-group <组名>        # 创建新业务系统骨架

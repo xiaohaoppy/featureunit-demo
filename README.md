@@ -104,7 +104,38 @@ npm run feat -- ticket <名字>           # 打印 AI 任务单
 
 一句话：**让 AI 写"可被考试的功能"，不写"感觉对了的功能"**——人负责业务风险（安全边界/语义），机器负责"是否完成"，AI 负责"怎么写"。
 
-## 七、常见问题
+## 七、正式部署
+
+```bash
+# 1. 装依赖 + 自检
+npm ci && npm run check
+
+# 2. 生产配置（环境变量，或用 .featureunit.local.json）
+export PORT=8080                 # 业务服务端口（默认 3000）
+export GROUP=order-service       # 启动哪个业务系统（默认 auth-service）
+export USER_STORE=sqlite         # 生产用真库
+export SQLITE_PATH=./data/app.db
+export LOG_DIR=./data/logs       # 日志落盘（app.log）
+export ERROR_LOG_DIR=./data/errors  # 错误记录（errors.log）
+
+# 3. 建表（sqlite 模式）
+npm run migrate
+
+# 4. 启动（生产）
+npm start
+# 访问：http://<主机>:8080/api/<功能名>
+
+# 5. 托管（二选一）
+pm2 start npm --name featureunit -- run start          # pm2
+# 或 systemd：ExecStart=/usr/bin/npm start --prefix /opt/featureunit-demo
+```
+
+- **为什么没有 dist 构建**：本项目源码为 ESM + 无扩展名 import（Bundler 解析），tsc 编译产物无法被 node 直接运行；生产与管理台一样用 tsx 直跑（同一套代码、同一套行为），避免"编译产物与源码行为不一致"；
+- **多业务系统**：每个组一个进程，`GROUP=<组名> npm start`；
+- **管理台**（可选）：`npm run admin` 单独起（:3001），生产可不开；
+- **密钥**：管理台才需要 `AI_API_KEY`（开发/生成用）；纯业务服务不需要 AI 密钥。
+
+## 八、常见问题
 
 | 问题 | 答案 |
 |---|---|
@@ -116,3 +147,4 @@ npm run feat -- ticket <名字>           # 打印 AI 任务单
 | 为什么每个产物都进 git？ | 人要为 AI 的产品负责——每个动作可追溯（也让"界面操作"可审计） |
 | 业务测试面板怎么没有我的功能？ | 面板操作是动态发现的——功能接入后自动出现；用「业务系统」下拉切换组 |
 | 生成的业务怎么访问？ | ① 管理台 🧪 业务测试面板（内部实例，随手冒烟）；② **`npm run dev`** 起真实业务服务（默认 :3000），浏览器/前端直接访问 `http://localhost:3000/api/<功能名>`；多业务系统用 `GROUP=<组名> npm run dev` |
+| 正式环境怎么部署？ | **`npm start`** 生产启动 + 环境变量配置（见「七、正式部署」）；pm2/systemd 托管，`GROUP=<组名>` 起多业务系统 |
