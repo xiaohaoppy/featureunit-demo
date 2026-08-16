@@ -74,7 +74,10 @@ export const CONFIG_KEYS = [
   { key: "AI_BASE_URL", label: "AI 接口地址", secret: false, fallback: "https://api.deepseek.com" },
   { key: "AI_MODEL", label: "AI 模型名（保存时自动从 API 获取列表）", secret: false, fallback: "deepseek-v4-flash", options: ["deepseek-v4-flash", "deepseek-v4-pro"] },
   { key: "AI_REASONING", label: "推理等级（low=快/省 high=深度推理）", secret: false, fallback: "medium", options: ["low", "medium", "high"] },
-  { key: "PORT", label: "业务服务数据接口", secret: false, fallback: "3000" },
+  { key: "PORT", label: "业务服务监听端口", secret: false, fallback: "3000" },
+  { key: "USER_STORE", label: "数据存储模式（框架级：业务数据按此接入）", secret: false, fallback: "memory", options: ["memory", "file", "sqlite"] },
+  { key: "SQLITE_PATH", label: "SQLite 数据库文件（相对项目根）", secret: false, fallback: "./data/app.db" },
+  { key: "DATA_DIR", label: "JSON 文件数据目录（file 模式）", secret: false, fallback: "./data" },
 ];
 
 // ---------------------------------------------------------------------------

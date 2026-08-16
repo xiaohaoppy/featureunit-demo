@@ -738,7 +738,7 @@ app.post("/admin/api/play", async (c) => {
       status: res.status,
       body: await res.text(),
       setCookie: res.headers.get("set-cookie") ?? null,
-      health: true, // 空框架：业务路由由流水线生成后自动可用
+      storageMode: loadConfig().USER_STORE, // 当前数据存储模式（前端试玩面板展示）
     });
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);

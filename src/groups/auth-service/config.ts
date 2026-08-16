@@ -12,8 +12,14 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const EnvSchema = z.object({
-  /** 业务服务端口。 */
+  /** 业务服务监听端口。 */
   PORT: z.coerce.number().int().positive().default(3000),
+  /** 数据存储模式：memory（内存）| file（JSON 文件）| sqlite（真库）。框架级配置，业务功能的数据存储按此接入。 */
+  USER_STORE: z.enum(["memory", "file", "sqlite"]).default("memory"),
+  /** USER_STORE=file 时的数据目录（相对项目根）。 */
+  DATA_DIR: z.string().default("./data"),
+  /** USER_STORE=sqlite 时的数据库文件（相对项目根）。 */
+  SQLITE_PATH: z.string().default("./data/app.db"),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
