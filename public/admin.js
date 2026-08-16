@@ -814,6 +814,85 @@ $("btn-pipe-reject").addEventListener("click", () =>
   }));
 
 // ---------------------------------------------------------------------------
+// 首次使用引导（onboarding）：安装后带用户走完前 4 步
+// ---------------------------------------------------------------------------
+
+/** 跳转到指定 tab（供引导按钮复用）。 */
+function goto(tab) {
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  document.querySelector(`.tabs button[data-tab="${tab}"]`).classList.add("active");
+  $("panel-" + tab).classList.add("active");
+}
+
+async function renderOnboarding() {
+  const box = $("onboarding");
+  if (!box) return;
+  const done = localStorage.getItem("fu-onboarded") === "1";
+
+  // 配置状态：AI 是否就绪
+  let aiReady = false;
+  try {
+    const cfg = await api("/admin/api/config");
+    aiReady = cfg.values.find((v) => v.key === "AI_API_KEY")?.hasValue ?? false;
+  } catch { /* 忽略 */ }
+
+  if (done && aiReady) {
+    box.innerHTML = "";
+    return;
+  }
+
+  const steps = [
+    { icon: "⚙️", title: "配置 AI", desc: "填入 API Key，选好模型与推理等级（没有 Key 可用演示模式）", done: aiReady, goto: "config" },
+    { icon: "🗣️", title: "说一句话", desc: "在下方输入框描述你的第一个功能，系统自动规划并逐步生成", done: false, goto: null },
+    { icon: "📦", title: "认识开发工作台", desc: "每个功能按 4 阶段推进：契约 → 判据 → 实现 → 接线", done: false, goto: "unit" },
+    { icon: "🧪", title: "试试业务", desc: "用内置试玩验证：注册 / 登录 / 查我", done: false, goto: "play" },
+  ];
+
+  box.innerHTML = `
+    <div class="card" style="border-color:var(--accent); background:linear-gradient(180deg,#fff,var(--accent-weak))">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="logo" style="width:40px;height:40px;font-size:18px">FU</div>
+        <div>
+          <h2 style="margin:0">👋 欢迎使用 FeatureUnit</h2>
+          <div class="hint">${aiReady ? "AI 已就绪，按下面 3 步开始你的第一个功能" : "还差一步配置：先填 AI 密钥（没有可用演示模式）"}</div>
+        </div>
+      </div>
+      <div class="check-list">
+        ${steps.map((s, i) => `
+          <div class="review-item">
+            <span class="idx">${i + 1}</span>
+            <span class="text">
+              <b>${s.icon} ${escapeHtml(s.title)}</b>
+              <div class="hint">${escapeHtml(s.desc)}</div>
+            </span>
+            <span class="badge ${s.done ? "ok" : "warn"}">${s.done ? "✅ 已完成" : "待做"}</span>
+            ${s.goto ? `<button class="btn ghost" data-goto="${s.goto}">去完成 →</button>` : `<button class="btn ghost" data-goto="start" data-focus="pipe-req">去输入 →</button>`}
+          </div>`).join("")}
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="btn-onboard-done">✅ 我已了解，开始使用</button>
+        <button class="btn ghost" id="btn-onboard-skip">跳过引导</button>
+        <span class="hint">引导可随时在「开始」页重新打开</span>
+      </div>
+    </div>`;
+
+  // 引导按钮
+  box.querySelectorAll("[data-goto]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      goto(btn.dataset.goto);
+      if (btn.dataset.focus) $("pipe-req")?.focus();
+    });
+  });
+  const finish = () => {
+    localStorage.setItem("fu-onboarded", "1");
+    renderOnboarding();
+  };
+  $("btn-onboard-done")?.addEventListener("click", finish);
+  $("btn-onboard-skip")?.addEventListener("click", finish);
+}
+
+// ---------------------------------------------------------------------------
 // 端口矩阵 / 配置
 // ---------------------------------------------------------------------------
 
@@ -882,7 +961,7 @@ $("btn-config-save").addEventListener("click", () =>
     await api("/admin/api/config", { method: "PUT", body: JSON.stringify({ values }) });
     $("config-msg").innerHTML = `<div class="msg ok">✅ 已保存到本地配置文件（不进入 git）</div>`;
     await loadConfigPanel();
-  }));
+renderOnboarding();  }));
 
 // ---------------------------------------------------------------------------
 // 初始化
@@ -901,3 +980,4 @@ loadSourceList();
 loadPortMatrix();
 loadPorts();
 loadConfigPanel();
+renderOnboarding();
