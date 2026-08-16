@@ -251,9 +251,12 @@ describe("toggle-favorite 单元判据", () => {
   // 编译预检能过但 HTTP 404，这里直接打新组路由防回归）
   r = await api("/admin/api/play?group=favorite-service", {
     method: "POST",
-    body: JSON.stringify({ method: "POST", path: "/api/toggle-favorite", data: { token: "t1", payload: {} } }),
+    // token 字段路由从 cookie 取（无 cookie → INVALID_SESSION 是正确拦截）；带 cookie 验证路由真实可达
+    body: JSON.stringify({ method: "POST", path: "/api/toggle-favorite", data: { token: "t1", payload: {} }, cookie: "sid=smoke-token" }),
   });
-  report("新组路由冒烟（接入路由已注册）", r.status === 200 && r.data.status === 200, `HTTP ${r.data.status}`);
+  // 非 404 即证明路由真实注册（400=业务拦截/401=会话校验，都是路由在跑；
+  // mock 实现是刻意坏实现，业务结果不可预期——这里只防"死代码 404"回归）
+  report("新组路由冒烟（接入路由已注册）", r.status === 200 && r.data.status !== 404, `HTTP ${r.data.status}`);
 }
 
 // ---------------------------------------------------------------------------
