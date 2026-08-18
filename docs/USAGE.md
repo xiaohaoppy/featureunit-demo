@@ -152,6 +152,7 @@ export AI_REASONING=medium
 ## 六、命令速查
 
 ```bash
+npm run doctor                         # 环境自检（Node/git/依赖/原生模块）
 npm run check                          # 总闸：tsc + 全部测试
 npm run admin                          # 管理台 :3001/admin
 npm run dev / start                    # 业务服务 :3000（开发/生产；GROUP=<组名> 切换业务系统）

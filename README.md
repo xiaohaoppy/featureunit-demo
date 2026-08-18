@@ -84,6 +84,7 @@ npm run migrate   # SQLite 模式建表（USER_STORE=sqlite 时需要）
 ## 五、命令速查
 
 ```bash
+npm run doctor                         # 环境自检（Node/git/依赖/原生模块）
 npm run check                          # 总闸
 npm run admin / migrate                # 管理台 / 建表
 npm run feat -- new-group <组名>        # 新业务系统

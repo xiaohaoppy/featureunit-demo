@@ -24,6 +24,7 @@
 ```bash
 cd featureunit-demo
 npm install
+npm run doctor       # 环境自检：Node/git/依赖/原生模块，全绿再继续
 npm run check        # 总闸 = tsc + vitest，应全绿
 npm run admin        # 管理台 http://localhost:3001/admin
 ```
